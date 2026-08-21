@@ -1,15 +1,24 @@
 import * as THREE from 'three';
 import emojiFontUrl from '@fontsource/noto-color-emoji/files/noto-color-emoji-5-400-normal.woff2?url';
 import { connectWorldStream } from './network.js';
+import { applyRenderQuality, createAdaptivePixelRatio } from './renderQuality.js';
 import { buildWorld, loadWorldAssets } from './world.js';
 import './style.css';
 
 const canvas = document.querySelector('#world');
 const screenshotMode = new URLSearchParams(location.search).has('screenshot');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: screenshotMode });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;
 const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(62, 1, .1, 100); camera.position.set(5.5,.6,11);
-scene.add(new THREE.HemisphereLight('#d8ece7','#6a7770',2.2)); const sun = new THREE.DirectionalLight('#fff4da',3); sun.position.set(-8,14,8); sun.castShadow=true; sun.shadow.mapSize.set(2048,2048); sun.shadow.camera.left=-18; sun.shadow.camera.right=18; sun.shadow.camera.top=18; sun.shadow.camera.bottom=-18; scene.add(sun);
+scene.add(new THREE.HemisphereLight('#d8ece7','#6a7770',2.2)); const sun = new THREE.DirectionalLight('#fff4da',3); sun.position.set(-8,14,8); sun.castShadow=true; sun.shadow.camera.left=-18; sun.shadow.camera.right=18; sun.shadow.camera.top=18; sun.shadow.camera.bottom=-18; scene.add(sun);
+const renderQuality = applyRenderQuality(renderer, sun, { screenshotMode });
+const adaptivePixelRatio = renderQuality.adaptive ? createAdaptivePixelRatio(renderer, {
+  initialPixelRatio: renderQuality.pixelRatio,
+  maximumPixelRatio: Math.min(devicePixelRatio, renderQuality.maxPixelRatio),
+  minimumPixelRatio: renderQuality.minPixelRatio,
+}) : null;
+renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.needsUpdate = true;
 const emojiFont = new FontFace('Noto Color Emoji', `url(${emojiFontUrl})`);
 document.fonts.add(await emojiFont.load());
 await loadWorldAssets();
@@ -63,8 +72,8 @@ function setConnectionStatus(status) {
   connectionStatus.querySelector('.status-label').textContent = labels[status] || 'World stream unavailable';
 }
 connectWorldStream({
-  onSnapshot(entities) { world.replaceEntities(entities); resetLegend(); },
-  onEntity(entity) { world.handleEntity(entity); updateLegendEntity(entity.id); },
+  onSnapshot(entities) { world.replaceEntities(entities); resetLegend(); renderer.shadowMap.needsUpdate = true; if (screenshotMode) renderScreenshot(); },
+  onEntity(entity) { world.handleEntity(entity); updateLegendEntity(entity.id); renderer.shadowMap.needsUpdate = true; if (screenshotMode) renderScreenshot(); },
   onStatus: setConnectionStatus,
 });
 
@@ -76,5 +85,5 @@ document.addEventListener('mousemove',e=>{ if(!active)return; yaw-=e.movementX*.
 addEventListener('keydown',e=>keys.add(e.code)); addEventListener('keyup',e=>keys.delete(e.code));
 function renderScreenshot(){ renderer.render(scene, camera); renderer.getContext().finish(); document.body.dataset.renderReady = 'true'; }
 function resize(){ const w=innerWidth,h=innerHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); if(screenshotMode) renderScreenshot(); } addEventListener('resize',resize); resize();
-function animate(){ requestAnimationFrame(animate); const dt=Math.min(clock.getDelta(),.05); camera.rotation.set(pitch,yaw,0,'YXZ'); const forward=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw)); const right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw)); const move=new THREE.Vector3(); if(keys.has('KeyW')||keys.has('ArrowUp'))move.add(forward); if(keys.has('KeyS')||keys.has('ArrowDown'))move.sub(forward); if(keys.has('KeyD')||keys.has('ArrowRight'))move.add(right); if(keys.has('KeyA')||keys.has('ArrowLeft'))move.sub(right); if(move.lengthSq())camera.position.addScaledVector(move.normalize(),dt*(keys.has('ShiftLeft')?7:4)); renderer.render(scene,camera); }
+function animate(){ requestAnimationFrame(animate); const frameDelta=clock.getDelta(); const dt=Math.min(frameDelta,.05); adaptivePixelRatio?.reportFrame(frameDelta); camera.rotation.set(pitch,yaw,0,'YXZ'); const forward=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw)); const right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw)); const move=new THREE.Vector3(); if(keys.has('KeyW')||keys.has('ArrowUp'))move.add(forward); if(keys.has('KeyS')||keys.has('ArrowDown'))move.sub(forward); if(keys.has('KeyD')||keys.has('ArrowRight'))move.add(right); if(keys.has('KeyA')||keys.has('ArrowLeft'))move.sub(right); if(move.lengthSq())camera.position.addScaledVector(move.normalize(),dt*(keys.has('ShiftLeft')?7:4)); renderer.render(scene,camera); }
 if (screenshotMode) renderScreenshot(); else animate();
