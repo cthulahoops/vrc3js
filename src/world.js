@@ -131,6 +131,11 @@ export class VirtualRcRenderer {
     this.scene.remove(object); this.entities.delete(id);
   }
 
+  replaceEntities(entities) {
+    for (const id of [...this.entities.keys()]) this.deleteEntity(id);
+    entities.forEach(entity => this.handleEntity(entity));
+  }
+
   createEntity(entity) {
     const group = new THREE.Group();
     if (entity.type === 'Wall') {
@@ -184,9 +189,9 @@ export const FIXTURE_WORLD = [
   { id: 'room-1', type: 'AudioRoom', pos: { x: 7, y: 3 }, width: 4, height: 4 },
 ];
 
-export function buildWorld(scene) {
+export function buildWorld(scene, initialEntities = FIXTURE_WORLD) {
   scene.background = new THREE.Color('#172322'); scene.fog = new THREE.Fog('#172322', 35, 85);
   const renderer = new VirtualRcRenderer(scene);
-  FIXTURE_WORLD.forEach(entity => renderer.handleEntity(entity));
+  initialEntities.forEach(entity => renderer.handleEntity(entity));
   return renderer;
 }

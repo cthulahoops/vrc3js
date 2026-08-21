@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import emojiFontUrl from '@fontsource/noto-color-emoji/files/noto-color-emoji-5-400-normal.woff2?url';
-import { buildWorld, FIXTURE_WORLD, loadWorldAssets } from './world.js';
+import { connectWorldStream } from './network.js';
+import { buildWorld, loadWorldAssets } from './world.js';
 import './style.css';
 
 const canvas = document.querySelector('#world');
@@ -11,9 +12,31 @@ scene.add(new THREE.HemisphereLight('#d8ece7','#6a7770',2.2)); const sun = new T
 const emojiFont = new FontFace('Noto Color Emoji', `url(${emojiFontUrl})`);
 document.fonts.add(await emojiFont.load());
 await loadWorldAssets();
-buildWorld(scene);
-const fixtureTypes = [...new Set(FIXTURE_WORLD.map(entity => entity.type))];
-document.querySelector('#nearby').innerHTML = fixtureTypes.slice(0, 6).map(type=>`<div class="person"><span class="face">◆</span>${type}</div>`).join('');
+const world = buildWorld(scene, []);
+const nearby = document.querySelector('#nearby');
+const connectionStatus = document.querySelector('#connection-status');
+function updateLegend() {
+  const types = [...new Set([...world.entities.values()].map(object => object.userData.entity.type))].slice(0, 6);
+  nearby.replaceChildren(...types.map(type => {
+    const row = document.createElement('div'); row.className = 'person';
+    const face = document.createElement('span'); face.className = 'face'; face.textContent = '◆';
+    row.append(face, document.createTextNode(type)); return row;
+  }));
+}
+function setConnectionStatus(status) {
+  const labels = {
+    connected: 'World stream connected', connecting: 'Connecting to world',
+    reconnecting: 'Reconnecting to world', disconnected: 'World stream disconnected',
+    unconfigured: 'RC credentials required',
+  };
+  connectionStatus.dataset.state = status;
+  connectionStatus.querySelector('.status-label').textContent = labels[status] || 'World stream unavailable';
+}
+connectWorldStream({
+  onSnapshot(entities) { world.replaceEntities(entities); updateLegend(); },
+  onEntity(entity) { world.handleEntity(entity); updateLegend(); },
+  onStatus: setConnectionStatus,
+});
 
 let yaw = 0, pitch = -.04, active = false; const keys = new Set(); const clock = new THREE.Clock();
 function lock() { canvas.requestPointerLock(); document.querySelector('#welcome').classList.add('hidden'); }

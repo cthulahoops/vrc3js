@@ -10,7 +10,9 @@ html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 .brand strong, .brand small { display: block; letter-spacing: .06em; }
 .brand strong { font-size: 14px; }.brand small { margin-top: 2px; color: #bfc8c3; font: 400 9px DM Mono; letter-spacing: .13em; }
 .status { padding: 9px 13px; border: 1px solid #ffffff1d; border-radius: 99px; background: #1018188c; backdrop-filter: blur(9px); color: #bdc6c1; font: 10px DM Mono; text-transform: uppercase; letter-spacing: .07em; }
-.status i { display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: #72d58a; box-shadow: 0 0 8px #72d58a; }.status span { margin: 0 7px; color: #fff4; }
+.status i { display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: #e4b75f; box-shadow: 0 0 8px #e4b75f; }
+.status[data-state="connected"] i { background: #72d58a; box-shadow: 0 0 8px #72d58a; }
+.status[data-state="disconnected"] i, .status[data-state="unconfigured"] i { background: #dc6d6d; box-shadow: 0 0 8px #dc6d6d; }
 .legend { position: fixed; z-index: 3; right: 25px; top: 84px; width: 166px; padding: 13px; border: 1px solid #ffffff17; border-radius: 12px; background: #10181892; backdrop-filter: blur(10px); }
 .legend p { margin: 0 0 10px; color: #82928c; font: 9px DM Mono; letter-spacing: .14em; }
 .person { display: flex; align-items: center; gap: 8px; margin-top: 7px; color: #dce1dd; font-size: 10px; }
