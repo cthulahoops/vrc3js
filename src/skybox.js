@@ -8,32 +8,16 @@ export const SKY_LOCATION = Object.freeze({ latitude: 39.6913, longitude: -73.98
 const UPSTREAM_ASSET_ROOT =
   'https://raw.githubusercontent.com/cthulahoops/vrc3d/8b057126f6eb8ba5e42e3660351970d08b0d2189/textures';
 
+// Atmospheric scattering is smooth across the dome. Evaluating the upstream
+// integration at mesh vertices preserves its model and constants without
+// paying for 128 ray samples at every screen pixel.
 const vertexShader = /* glsl */ `
   varying vec3 ray_direction;
+  varying vec3 atmosphere_scattering;
 
-  void main() {
-    ray_direction = position;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
-
-// Ported from sky.frag.glsl in cthulahoops/vrc3d. The scattering constants,
-// celestial mapping, enlarged moon disc, ground color, and optional grid are
-// deliberately retained so the result matches the original rather than a
-// generic Three.js sky.
-const fragmentShader = /* glsl */ `
-  varying vec3 ray_direction;
-
-  uniform sampler2D stars_array_sampler;
-  uniform sampler2D moon_array_sampler;
-  uniform mat4 celestial_matrix;
-  uniform mat4 moon_matrix;
   uniform vec3 sun_position;
-  uniform vec3 moon_position;
-  uniform bool show_grid;
   uniform bool show_atmosphere;
 
-  const float moon_radius = 0.03;
   const float PI = 3.1415926535;
   const int iSteps = 16;
   const int jSteps = 8;
@@ -100,6 +84,46 @@ const fragmentShader = /* glsl */ `
     return iSun * (3.0 * pRlh * kRlh * totalRlh + pMie * kMie * totalMie);
   }
 
+  void main() {
+    ray_direction = position;
+    vec3 normal_position = normalize(position);
+    atmosphere_scattering = !show_atmosphere || normal_position.y < 0.0 ? vec3(0.0) : atmosphere(
+      normal_position,
+      vec3(0.0, 6372e3, 0.0),
+      sun_position,
+      22.0,
+      6371e3,
+      6471e3,
+      1.5 * vec3(5.5e-6, 13.0e-6, 22.4e-6),
+      21e-6,
+      8e3,
+      1.2e3,
+      0.95
+    );
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+// Ported from sky.frag.glsl in cthulahoops/vrc3d. The scattering constants,
+// celestial mapping, enlarged moon disc, ground color, and optional grid are
+// deliberately retained so the result matches the original rather than a
+// generic Three.js sky.
+const fragmentShader = /* glsl */ `
+  varying vec3 ray_direction;
+  varying vec3 atmosphere_scattering;
+
+  uniform sampler2D stars_array_sampler;
+  uniform sampler2D moon_array_sampler;
+  uniform mat4 celestial_matrix;
+  uniform mat4 moon_matrix;
+  uniform vec3 sun_position;
+  uniform vec3 moon_position;
+  uniform bool show_grid;
+  uniform bool show_atmosphere;
+
+  const float moon_radius = 0.03;
+  const float PI = 3.1415926535;
+
   vec2 angular_position(vec4 position) {
     float altitude = 360.0 * atan(position.y / length(position.xz)) / (2.0 * PI);
     float azimuth = 90.0 + 360.0 * atan(position.z / position.x) / (2.0 * PI);
@@ -146,25 +170,12 @@ const fragmentShader = /* glsl */ `
       background += 0.7 * starmap_color.rgb;
     }
 
-    vec3 atmosphere_color = atmosphere(
-      normal_position,
-      vec3(0.0, 6372e3, 0.0),
-      sun_position,
-      22.0,
-      6371e3,
-      6471e3,
-      1.5 * vec3(5.5e-6, 13.0e-6, 22.4e-6),
-      21e-6,
-      8e3,
-      1.2e3,
-      0.95
-    );
-    atmosphere_color = show_atmosphere
-      ? 1.0 - exp(-max(background, atmosphere_color))
+    vec3 sky_color = show_atmosphere
+      ? 1.0 - exp(-max(background, atmosphere_scattering))
       : background;
 
-    if (show_grid) atmosphere_color += vec3(0.3) * grid(celestial_position);
-    gl_FragColor = vec4(atmosphere_color, 1.0);
+    if (show_grid) sky_color += vec3(0.3) * grid(celestial_position);
+    gl_FragColor = vec4(sky_color, 1.0);
   }
 `;
 
@@ -278,6 +289,10 @@ export class Skybox {
 
     if (this.directionalLight) {
       this.directionalLight.position.copy(this.uniforms.sun_position.value).multiplyScalar(20);
+      // The upstream renderer projects the light from below the ground after
+      // sunset. Three.js then produces upward-facing illumination and invalid
+      // shadow maps, so remove the solar light while it is below the horizon.
+      this.directionalLight.visible = this.uniforms.sun_position.value.y > 0;
     }
     return true;
   }
