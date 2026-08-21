@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#121b1b" />
+    <title>VRC3D — Three.js prototype</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="world" aria-label="Interactive 3D spatial office"></canvas>
+      <header class="topbar">
+        <a class="brand" href="https://github.com/cthulahoops/vrc3d" target="_blank" rel="noreferrer">
+          <span class="brand-mark">V</span>
+          <span><strong>VRC3D</strong><small>THREE.JS PROTOTYPE</small></span>
+        </a>
+        <div class="status"><i></i> Fixed renderer fixture <span>·</span> no network</div>
+      </header>
+      <aside class="legend">
+        <p>ENTITY TYPES</p>
+        <div id="nearby"></div>
+      </aside>
+      <div class="reticle" aria-hidden="true"></div>
+      <section id="welcome" class="welcome">
+        <div class="eyebrow">A WEB EXPERIMENT</div>
+        <h1>Step inside.</h1>
+        <p>A browser-based sketch of the VRC3D spatial office.</p>
+        <button id="enter">Enter world <span>↗</span></button>
+        <div class="controls"><span><kbd>WASD</kbd> move</span><span><kbd>MOUSE</kbd> look</span><span><kbd>ESC</kbd> release</span></div>
+      </section>
+      <footer class="hint" id="hint">Click anywhere to look around · WASD to move</footer>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
