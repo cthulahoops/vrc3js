@@ -27,7 +27,7 @@ globalThis.document ??= {
   },
 };
 
-const { VirtualRcRenderer } = await import('../src/world.js');
+const { FIXTURE_WORLD, VirtualRcRenderer } = await import('../src/world.js');
 
 function makeRenderer() {
   const scene = new THREE.Scene();
@@ -45,12 +45,10 @@ function wall(id, x = 0, overrides = {}) {
   };
 }
 
-function firstMesh(object) {
-  let result;
-  object.traverse(child => {
-    if (!result && child.isMesh) result = child;
-  });
-  return result;
+function firstBatch(renderer, object) {
+  const component = object.userData.components[0];
+  const bucketKey = renderer.instanceBatches.locations.get(component.key);
+  return renderer.instanceBatches.batches.get(bucketKey);
 }
 
 test('an identical entity update does not replace its render object or resources', () => {
@@ -59,15 +57,14 @@ test('an identical entity update does not replace its render object or resources
   renderer.handleEntity(entity);
 
   const before = renderer.entities.get(entity.id);
-  const meshBefore = firstMesh(before);
+  const batchBefore = firstBatch(renderer, before);
   renderer.handleEntity(structuredClone(entity));
 
   const after = renderer.entities.get(entity.id);
-  const meshAfter = firstMesh(after);
+  const batchAfter = firstBatch(renderer, after);
   assert.strictEqual(after, before);
-  assert.strictEqual(meshAfter.geometry, meshBefore.geometry);
-  assert.strictEqual(meshAfter.material, meshBefore.material);
-  assert.strictEqual(meshAfter.material.map, meshBefore.material.map);
+  assert.strictEqual(batchAfter, batchBefore);
+  assert.strictEqual(batchAfter.mesh, batchBefore.mesh);
 });
 
 test('a position-only update mutates the transform and retains resources', () => {
@@ -75,17 +72,18 @@ test('a position-only update mutates the transform and retains resources', () =>
   renderer.handleEntity(wall('wall-1', 1));
 
   const before = renderer.entities.get('wall-1');
-  const meshBefore = firstMesh(before);
+  const batchBefore = firstBatch(renderer, before);
   renderer.handleEntity(wall('wall-1', 7, { pos: { x: 7, y: 3 } }));
 
   const after = renderer.entities.get('wall-1');
-  const meshAfter = firstMesh(after);
+  const batchAfter = firstBatch(renderer, after);
   assert.strictEqual(after, before);
   assert.deepEqual(after.position.toArray(), [7, 0, 3]);
   assert.deepEqual(after.userData.entity.pos, { x: 7, y: 3 });
-  assert.strictEqual(meshAfter.geometry, meshBefore.geometry);
-  assert.strictEqual(meshAfter.material, meshBefore.material);
-  assert.strictEqual(meshAfter.material.map, meshBefore.material.map);
+  assert.strictEqual(batchAfter, batchBefore);
+  assert.equal(batchAfter.size, 1);
+  const matrix = batchAfter.getMatrix(after.userData.components[0].key);
+  assert.deepEqual(new THREE.Vector3().setFromMatrixPosition(matrix).toArray(), [7, .5, 3]);
 });
 
 test('snapshot replacement reconciles by id instead of rebuilding the world', () => {
@@ -101,7 +99,7 @@ test('snapshot replacement reconciles by id instead of rebuilding the world', ()
   assert.strictEqual(renderer.entities.get('move'), moved);
   assert.deepEqual(moved.position.toArray(), [8, 0, 0]);
   assert.equal(renderer.entities.has('remove'), false);
-  assert.equal(scene.children.includes(removed), false);
+  assert.equal(renderer.instanceBatches.locations.has(removed.userData.components[0].key), false);
   assert.equal(renderer.entities.has('add'), true);
   assert.deepEqual([...renderer.entities.keys()].sort(), ['add', 'keep', 'move']);
 });
@@ -114,7 +112,7 @@ test('an update that becomes non-renderable removes its previous object', () => 
   renderer.handleEntity({ id: 'bot-1', type: 'Bot', pos: { x: 1, y: 2 }, emoji: '👾' });
 
   assert.equal(renderer.entities.has('bot-1'), false);
-  assert.equal(scene.children.includes(previous), false);
+  assert.equal(renderer.instanceBatches.locations.has(previous.userData.components[0].key), false);
 });
 
 test('equivalent entities share immutable geometry, material, and texture resources', () => {
@@ -122,22 +120,22 @@ test('equivalent entities share immutable geometry, material, and texture resour
   renderer.handleEntity(wall('wall-1', 1));
   renderer.handleEntity(wall('wall-2', 2));
 
-  const first = firstMesh(renderer.entities.get('wall-1'));
-  const second = firstMesh(renderer.entities.get('wall-2'));
-  assert.strictEqual(second.geometry, first.geometry);
-  assert.strictEqual(second.material, first.material);
-  assert.strictEqual(second.material.map, first.material.map);
+  const first = firstBatch(renderer, renderer.entities.get('wall-1'));
+  const second = firstBatch(renderer, renderer.entities.get('wall-2'));
+  assert.strictEqual(second, first);
+  assert.equal(first.size, 2);
+  assert.equal(first.mesh.count, 2);
 });
 
 test('shared resources live until renderer disposal, not individual entity deletion', () => {
   const { renderer } = makeRenderer();
   renderer.handleEntity(wall('wall-1', 1));
   renderer.handleEntity(wall('wall-2', 2));
-  const mesh = firstMesh(renderer.entities.get('wall-1'));
+  const batch = firstBatch(renderer, renderer.entities.get('wall-1'));
   const disposeCounts = { geometry: 0, material: 0, texture: 0 };
-  mesh.geometry.addEventListener('dispose', () => { disposeCounts.geometry += 1; });
-  mesh.material.addEventListener('dispose', () => { disposeCounts.material += 1; });
-  mesh.material.map.addEventListener('dispose', () => { disposeCounts.texture += 1; });
+  batch.geometry.addEventListener('dispose', () => { disposeCounts.geometry += 1; });
+  batch.material.addEventListener('dispose', () => { disposeCounts.material += 1; });
+  batch.material.map.addEventListener('dispose', () => { disposeCounts.texture += 1; });
 
   renderer.deleteEntity('wall-1');
   renderer.deleteEntity('wall-2');
@@ -148,7 +146,7 @@ test('shared resources live until renderer disposal, not individual entity delet
 });
 
 test('a representative update stream keeps renderer resource cardinality bounded', () => {
-  const { renderer } = makeRenderer();
+  const { scene, renderer } = makeRenderer();
   const entities = Array.from({ length: 100 }, (_, index) => wall(`wall-${index}`, index));
   renderer.replaceEntities(entities);
   const initialObjects = new Map(renderer.entities);
@@ -160,11 +158,48 @@ test('a representative update stream keeps renderer resource cardinality bounded
   }
 
   const objects = [...renderer.entities.values()];
-  const meshes = objects.map(firstMesh);
   assert.equal(new Set(objects).size, 100);
   assert.ok([...renderer.entities].every(([id, object]) => object === initialObjects.get(id)));
-  assert.equal(new Set(meshes.map(mesh => mesh.geometry)).size, 1);
-  assert.equal(new Set(meshes.map(mesh => mesh.material)).size, 1);
-  assert.equal(new Set(meshes.map(mesh => mesh.material.map)).size, 1);
   assert.ok(objects.every(object => object.position.z === 10));
+  assert.equal(renderer.instanceBatches.batches.size, 1);
+  const [batch] = renderer.instanceBatches.batches.values();
+  assert.equal(batch.size, 100);
+  assert.equal(batch.mesh.count, 100);
+  assert.equal(scene.children.filter(child => child.isInstancedMesh).length, 1);
+});
+
+test('desks collapse all components and colors into one shared draw batch', () => {
+  const { scene, renderer } = makeRenderer();
+  renderer.handleEntity({ id: 'desk-1', type: 'Desk', pos: { x: 1, y: 2 } });
+  renderer.handleEntity({ id: 'desk-2', type: 'Desk', pos: { x: 3, y: 4 } });
+
+  assert.equal(renderer.instanceBatches.batches.size, 1);
+  assert.deepEqual([...renderer.instanceBatches.batches.values()].map(batch => batch.size), [10]);
+  assert.equal(scene.children.filter(child => child.isInstancedMesh).length, 1);
+});
+
+test('different cube dimensions share a material batch through matrix scaling', () => {
+  const { renderer } = makeRenderer();
+  const handle = new THREE.Object3D();
+  handle.userData.components = [];
+  renderer.setEntityComponents(handle, [
+    renderer.cube(new THREE.Vector3(1, 1, 1), '#123456'),
+    renderer.cube(new THREE.Vector3(.2, .4, .6), '#123456'),
+  ]);
+
+  assert.equal(renderer.instanceBatches.batches.size, 1);
+  const [batch] = renderer.instanceBatches.batches.values();
+  assert.strictEqual(batch.material, renderer.instanceColorMaterial);
+  assert.equal(batch.size, 2);
+});
+
+test('fixture world batches its nineteen cube components into thirteen draws', () => {
+  const { scene, renderer } = makeRenderer();
+  renderer.replaceEntities(FIXTURE_WORLD);
+
+  const componentCount = [...renderer.entities.values()]
+    .reduce((total, handle) => total + handle.userData.components.length, 0);
+  assert.equal(componentCount, 19);
+  assert.equal(renderer.instanceBatches.batches.size, 13);
+  assert.equal(scene.children.filter(child => child.isInstancedMesh).length, 13);
 });

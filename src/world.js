@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ORIGINAL_TEXTURES } from './originalTextures.js';
+import { InstanceBatchRegistry } from './instanceBatches.js';
 
 const EMOJI_DATA_URL = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@14.0.0/emoji.json';
 const EMOJI_SHEET_URL = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@14.0.0/img/apple/sheets-256/64.png';
@@ -139,6 +140,9 @@ export class VirtualRcRenderer {
     this.geometries = new Map();
     this.materials = new Map();
     this.textures = new Map();
+    this.instanceBatches = new InstanceBatchRegistry(scene);
+    this.instanceGeometry = this.geometry(new THREE.Vector3(1, 1, 1));
+    this.instanceColorMaterial = this.cachedMaterial('#ffffff');
     const floor = new THREE.Mesh(
       this.geometry(new THREE.Vector3(1000, 1, 1000)),
       this.cachedMaterial('#eeeeee', this.texture('grid', gridTexture)),
@@ -193,11 +197,48 @@ export class VirtualRcRenderer {
   }
 
   cube(size, color, texture = null, offset = new THREE.Vector3()) {
-    const mesh = new THREE.Mesh(this.geometry(size), this.cachedMaterial(color, texture));
-    mesh.position.set(offset.x, offset.y + size.y / 2, offset.z);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    return mesh;
+    return {
+      size,
+      offset,
+      material: texture ? this.cachedMaterial(color, texture) : this.instanceColorMaterial,
+      color: texture ? null : new THREE.Color(color),
+    };
+  }
+
+  componentMatrix(handle, component, target = new THREE.Matrix4()) {
+    const position = VirtualRcRenderer.scratchPosition.set(
+      handle.position.x + component.offset.x,
+      component.offset.y + component.size.y / 2,
+      handle.position.z + component.offset.z,
+    );
+    return target.compose(position, VirtualRcRenderer.identityQuaternion, component.size);
+  }
+
+  setEntityComponents(handle, components) {
+    const previous = handle.userData.components || [];
+    handle.userData.components = components.map((component, index) => ({
+      ...component,
+      key: previous[index]?.key || {},
+    }));
+    this.updateEntityMatrices(handle);
+    for (let index = components.length; index < previous.length; index += 1) {
+      this.instanceBatches.delete(previous[index].key);
+    }
+  }
+
+  updateEntityMatrices(handle) {
+    for (const component of handle.userData.components || []) {
+      const bucketKey = `${this.instanceGeometry.uuid}:${component.material.uuid}:shadow`;
+      this.instanceBatches.set(component.key, {
+        bucketKey,
+        geometry: this.instanceGeometry,
+        material: component.material,
+        matrix: this.componentMatrix(handle, component, VirtualRcRenderer.scratchMatrix),
+        castShadow: true,
+        receiveShadow: true,
+        color: component.color,
+      });
+    }
   }
 
   async setAvatarImage(id, source) {
@@ -234,24 +275,27 @@ export class VirtualRcRenderer {
     if (!forceRebuild && currentEntity && valuesEqual(currentEntity, entity, 'pos')) {
       currentObject.position.set(entity.pos.x, 0, entity.pos.y);
       currentObject.userData.entity = structuredClone(entity);
+      this.updateEntityMatrices(currentObject);
       return;
     }
-    const rendered = this.createEntity(entity);
-    if (!rendered) {
+    const components = this.createEntity(entity);
+    if (!components) {
       // A renderable record can become intentionally invisible (for example,
       // the upstream default bot emoji). Do not leave its old object behind.
       if (currentObject) this.deleteEntity(entity.id);
       return;
     }
-    this.deleteEntity(entity.id);
+    const rendered = currentObject || new THREE.Object3D();
     rendered.position.set(entity.pos.x, 0, entity.pos.y);
     rendered.userData.entity = structuredClone(entity);
-    this.entities.set(entity.id, rendered); this.scene.add(rendered);
+    this.setEntityComponents(rendered, components);
+    this.entities.set(entity.id, rendered);
   }
 
   deleteEntity(id) {
     const object = this.entities.get(id); if (!object) return;
-    this.scene.remove(object); this.entities.delete(id);
+    for (const component of object.userData.components || []) this.instanceBatches.delete(component.key);
+    this.entities.delete(id);
   }
 
   replaceEntities(entities) {
@@ -266,6 +310,7 @@ export class VirtualRcRenderer {
   dispose() {
     for (const id of [...this.entities.keys()]) this.deleteEntity(id);
     this.scene.remove(this.floor);
+    this.instanceBatches.dispose();
     this.geometries.forEach(geometry => geometry.dispose());
     this.materials.forEach(cached => cached.dispose());
     this.textures.forEach(texture => texture.dispose());
@@ -274,38 +319,42 @@ export class VirtualRcRenderer {
   }
 
   createEntity(entity) {
-    const group = new THREE.Group();
+    const components = [];
     if (entity.type === 'Wall') {
       const texture = entity.wall_text
         ? this.cachedGlyphTexture(entity.wall_text, COLORS[entity.color], '#17201e')
         : null;
-      group.add(this.cube(new THREE.Vector3(1, 1, 1), COLORS[entity.color], texture));
+      components.push(this.cube(new THREE.Vector3(1, 1, 1), COLORS[entity.color], texture));
     } else if (entity.type === 'Desk') {
-      group.add(this.cube(new THREE.Vector3(.9, .04, .9), COLORS.orange, null, new THREE.Vector3(0, .35, 0)));
+      components.push(this.cube(new THREE.Vector3(.9, .04, .9), COLORS.orange, null, new THREE.Vector3(0, .35, 0)));
       for (const x of [-.4, .4]) for (const z of [-.4, .4])
-        group.add(this.cube(new THREE.Vector3(.04, .35, .04), '#333333', null, new THREE.Vector3(x, 0, z)));
+        components.push(this.cube(new THREE.Vector3(.04, .35, .04), '#333333', null, new THREE.Vector3(x, 0, z)));
     } else if (entity.type === 'Avatar') {
-      group.add(this.cube(new THREE.Vector3(.05, .8, .4), '#000000', this.cachedAvatarTexture(entity)));
+      components.push(this.cube(new THREE.Vector3(.05, .8, .4), '#000000', this.cachedAvatarTexture(entity)));
     } else if (entity.type === 'ZoomLink') {
-      group.add(this.cube(new THREE.Vector3(.6, .6, .6), '#0000ff', this.cachedIconTexture(entity.type, '#2472d9')));
+      components.push(this.cube(new THREE.Vector3(.6, .6, .6), '#0000ff', this.cachedIconTexture(entity.type, '#2472d9')));
     } else if (entity.type === 'Bot' && entity.emoji !== '👾') {
-      group.add(this.cube(new THREE.Vector3(.4, .4, .4), '#202020', this.cachedGlyphTexture(entity.emoji, '#202020', '#ffffff')));
+      components.push(this.cube(new THREE.Vector3(.4, .4, .4), '#202020', this.cachedGlyphTexture(entity.emoji, '#202020', '#ffffff')));
     } else if (entity.type === 'Link') {
-      group.add(this.cube(new THREE.Vector3(.8, .8, .8), '#114433', this.cachedIconTexture(entity.type)));
+      components.push(this.cube(new THREE.Vector3(.8, .8, .8), '#114433', this.cachedIconTexture(entity.type)));
     } else if (entity.type === 'Note') {
-      group.add(this.cube(new THREE.Vector3(1, 1, 1), COLORS.yellow, this.cachedIconTexture(entity.type)));
+      components.push(this.cube(new THREE.Vector3(1, 1, 1), COLORS.yellow, this.cachedIconTexture(entity.type)));
     } else if (entity.type === 'AudioBlock' || entity.type === 'RC::Calendar') {
-      group.add(this.cube(new THREE.Vector3(.6, .6, .6), '#114433', this.cachedIconTexture(entity.type)));
+      components.push(this.cube(new THREE.Vector3(.6, .6, .6), '#114433', this.cachedIconTexture(entity.type)));
     } else if (entity.type === 'AudioRoom') {
       const texture = this.cachedIconTexture(entity.type, null, { x: entity.width, y: entity.height });
-      group.add(this.cube(
+      components.push(this.cube(
         new THREE.Vector3(entity.width, .002, entity.height), '#114433', texture,
         new THREE.Vector3(entity.width / 2 - .5, 0, entity.height / 2 - .5),
       ));
     } else return null;
-    return group;
+    return components;
   }
 }
+
+VirtualRcRenderer.scratchMatrix = new THREE.Matrix4();
+VirtualRcRenderer.scratchPosition = new THREE.Vector3();
+VirtualRcRenderer.identityQuaternion = new THREE.Quaternion();
 
 export const FIXTURE_WORLD = [
   { id: 'wall-a', type: 'Wall', pos: { x: 0, y: 0 }, color: 'blue', wall_text: 'A' },
