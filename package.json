@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@fontsource/noto-color-emoji": "^5.3.1",
+    "astronomy-engine": "^2.1.19",
     "three": "^0.179.1",
     "ws": "^8.21.3"
   },

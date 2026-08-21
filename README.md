@@ -1,6 +1,6 @@
 # VRC3D Three.js prototype
 
-A Three.js port of the rendering core from [cthulahoops/vrc3d](https://github.com/cthulahoops/vrc3d). The renderer consumes protocol-shaped entity records and preserves the original entity dimensions and placement rules. A localhost backend-for-frontend (BFF) holds the RC application credentials, maintains one shared Action Cable subscription, and relays sanitized world snapshots and entity updates to browsers.
+A Three.js port of the rendering core from [cthulahoops/vrc3d](https://github.com/cthulahoops/vrc3d). The renderer consumes protocol-shaped entity records and preserves the original entity dimensions and placement rules. A localhost backend-for-frontend (BFF) holds the RC application credentials, maintains one shared Action Cable subscription, and relays sanitized world snapshots and entity updates to browsers. The astronomical sky ports the original NASA star map, Moon phase lighting, and atmospheric-scattering shader.
 
 ## Run
 

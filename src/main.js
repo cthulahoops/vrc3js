@@ -3,6 +3,7 @@ import emojiFontUrl from '@fontsource/noto-color-emoji/files/noto-color-emoji-5-
 import { connectWorldStream } from './network.js';
 import { applyRenderQuality, createAdaptivePixelRatio } from './renderQuality.js';
 import { buildWorld, loadWorldAssets } from './world.js';
+import { Skybox } from './skybox.js';
 import './style.css';
 
 const canvas = document.querySelector('#world');
@@ -19,9 +20,18 @@ const adaptivePixelRatio = renderQuality.adaptive ? createAdaptivePixelRatio(ren
 }) : null;
 renderer.shadowMap.autoUpdate = false;
 renderer.shadowMap.needsUpdate = true;
+const skyboxPromise = Skybox.create(scene, {
+  directionalLight: sun,
+  date: screenshotMode ? new Date('2021-06-20T16:00:00Z') : new Date(),
+});
 const emojiFont = new FontFace('Noto Color Emoji', `url(${emojiFontUrl})`);
-document.fonts.add(await emojiFont.load());
-await loadWorldAssets();
+const [skybox] = await Promise.all([
+  skyboxPromise,
+  emojiFont.load().then(font => document.fonts.add(font)),
+  loadWorldAssets(),
+]);
+const shadowSunDirection = skybox.sunDirection.clone();
+const shadowSunThreshold = THREE.MathUtils.degToRad(.25);
 const world = buildWorld(scene, []);
 const nearby = document.querySelector('#nearby');
 const connectionStatus = document.querySelector('#connection-status');
@@ -85,5 +95,6 @@ document.addEventListener('mousemove',e=>{ if(!active)return; yaw-=e.movementX*.
 addEventListener('keydown',e=>keys.add(e.code)); addEventListener('keyup',e=>keys.delete(e.code));
 function renderScreenshot(){ renderer.render(scene, camera); renderer.getContext().finish(); document.body.dataset.renderReady = 'true'; }
 function resize(){ const w=innerWidth,h=innerHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); if(screenshotMode) renderScreenshot(); } addEventListener('resize',resize); resize();
-function animate(){ requestAnimationFrame(animate); const frameDelta=clock.getDelta(); const dt=Math.min(frameDelta,.05); adaptivePixelRatio?.reportFrame(frameDelta); camera.rotation.set(pitch,yaw,0,'YXZ'); const forward=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw)); const right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw)); const move=new THREE.Vector3(); if(keys.has('KeyW')||keys.has('ArrowUp'))move.add(forward); if(keys.has('KeyS')||keys.has('ArrowDown'))move.sub(forward); if(keys.has('KeyD')||keys.has('ArrowRight'))move.add(right); if(keys.has('KeyA')||keys.has('ArrowLeft'))move.sub(right); if(move.lengthSq())camera.position.addScaledVector(move.normalize(),dt*(keys.has('ShiftLeft')?7:4)); renderer.render(scene,camera); }
+function updateSkybox(){ if(skybox.update() && shadowSunDirection.angleTo(skybox.sunDirection) >= shadowSunThreshold){ shadowSunDirection.copy(skybox.sunDirection); renderer.shadowMap.needsUpdate=true; } }
+function animate(){ requestAnimationFrame(animate); const frameDelta=clock.getDelta(); const dt=Math.min(frameDelta,.05); adaptivePixelRatio?.reportFrame(frameDelta); updateSkybox(); camera.rotation.set(pitch,yaw,0,'YXZ'); const forward=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw)); const right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw)); const move=new THREE.Vector3(); if(keys.has('KeyW')||keys.has('ArrowUp'))move.add(forward); if(keys.has('KeyS')||keys.has('ArrowDown'))move.sub(forward); if(keys.has('KeyD')||keys.has('ArrowRight'))move.add(right); if(keys.has('KeyA')||keys.has('ArrowLeft'))move.sub(right); if(move.lengthSq())camera.position.addScaledVector(move.normalize(),dt*(keys.has('ShiftLeft')?7:4)); renderer.render(scene,camera); }
 if (screenshotMode) renderScreenshot(); else animate();

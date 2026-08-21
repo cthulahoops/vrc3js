@@ -375,7 +375,7 @@ export const FIXTURE_WORLD = [
 ];
 
 export function buildWorld(scene, initialEntities = FIXTURE_WORLD) {
-  scene.background = new THREE.Color('#172322'); scene.fog = new THREE.Fog('#172322', 35, 85);
+  scene.fog = new THREE.Fog('#172322', 35, 85);
   const renderer = new VirtualRcRenderer(scene);
   initialEntities.forEach(entity => renderer.handleEntity(entity));
   return renderer;
