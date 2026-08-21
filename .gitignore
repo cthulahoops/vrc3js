@@ -3,3 +3,5 @@ dist/
 .DS_Store
 .rodney/
 .rodney-libs/
+.env
+.env.*
