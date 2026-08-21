@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import { ORIGINAL_TEXTURES } from './originalTextures.js';
-import { EMOJI_TEXTURES } from './emojiTextures.js';
+
+const EMOJI_DATA_URL = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@14.0.0/emoji.json';
+const EMOJI_SHEET_URL = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@14.0.0/img/apple/sheets-256/64.png';
+const EMOJI_SIZE = 64;
+const EMOJI_CELL_SIZE = EMOJI_SIZE + 2;
 
 export const COLORS = {
   gray: '#919c9c', pink: '#d95a88', orange: '#e6a56e', green: '#3dc06c',
@@ -13,12 +17,43 @@ const ICONS = {
 };
 
 let loadedAssets = {};
+let emojiSprites = new Map();
+
+function loadImage(source, crossOrigin = false) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    if (crossOrigin) image.crossOrigin = 'anonymous';
+    image.onload = () => resolve(image); image.onerror = reject; image.src = source;
+  });
+}
+
+function addEmojiSprite(sprites, entry) {
+  if (entry.sheet_x == null || entry.sheet_y == null || !entry.has_img_apple) return;
+  const sprite = { x: entry.sheet_x * EMOJI_CELL_SIZE + 1, y: entry.sheet_y * EMOJI_CELL_SIZE + 1 };
+  sprites.set(entry.unified, sprite);
+  if (entry.non_qualified) sprites.set(entry.non_qualified, sprite);
+}
+
+function indexEmojiSprites(data) {
+  const sprites = new Map();
+  data.forEach(entry => {
+    addEmojiSprite(sprites, entry);
+    Object.values(entry.skin_variations || {}).forEach(variation => addEmojiSprite(sprites, variation));
+  });
+  return sprites;
+}
 
 export async function loadWorldAssets() {
-  const sources = { ...ORIGINAL_TEXTURES, ...EMOJI_TEXTURES };
-  loadedAssets = Object.fromEntries(await Promise.all(Object.entries(sources).map(([name, source]) => new Promise((resolve, reject) => {
-    const image = new Image(); image.onload = () => resolve([name, image]); image.onerror = reject; image.src = source;
-  }))));
+  const [assets, emojiData, emojiSheet] = await Promise.all([
+    Promise.all(Object.entries(ORIGINAL_TEXTURES).map(async ([name, source]) => [name, await loadImage(source)])),
+    fetch(EMOJI_DATA_URL).then(response => {
+      if (!response.ok) throw new Error(`Could not load emoji data (${response.status})`);
+      return response.json();
+    }),
+    loadImage(EMOJI_SHEET_URL, true),
+  ]);
+  loadedAssets = { ...Object.fromEntries(assets), emojiSheet };
+  emojiSprites = indexEmojiSprites(emojiData);
 }
 
 function canvasTexture(draw, repeat) {
@@ -51,11 +86,11 @@ function faceTexture(symbol, background, foreground = '#16201e', emoji = false) 
 }
 
 function glyphTexture(symbol, background, foreground = '#16201e') {
-  if ([...symbol].length !== 1) return null;
-  const emoji = loadedAssets[`emoji_${symbol.codePointAt(0).toString(16)}`];
-  if (emoji) return canvasTexture((context, canvas) => {
+  const unified = [...symbol].map(character => character.codePointAt(0).toString(16).toUpperCase()).join('-');
+  const sprite = emojiSprites.get(unified);
+  if (sprite) return canvasTexture((context, canvas) => {
     context.fillStyle = background; context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(emoji, 28, 28, 200, 200);
+    context.drawImage(loadedAssets.emojiSheet, sprite.x, sprite.y, EMOJI_SIZE, EMOJI_SIZE, 28, 28, 200, 200);
   });
   return faceTexture(symbol, background, foreground, /[^\u0000-\u00ff]/.test(symbol));
 }

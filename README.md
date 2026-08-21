@@ -31,4 +31,6 @@ The development BFF intentionally has no user authentication. It accepts browser
 
 Snapshots replace the renderer's entire entity set; entity messages are incremental. The exported `FIXTURE_WORLD` remains available for renderer development and tests, but the application starts with an empty scene and waits for the shared stream.
 
-Emoji SVG artwork is from [Twemoji](https://github.com/jdecked/twemoji), licensed under CC-BY 4.0.
+Emoji artwork is loaded from the Apple sprite sheet in
+[`emoji-datasource-apple`](https://github.com/iamcal/emoji-data). Apple emoji
+images are copyrighted by Apple Inc. and are not licensed for commercial use.
