@@ -16,13 +16,42 @@ await loadWorldAssets();
 const world = buildWorld(scene, []);
 const nearby = document.querySelector('#nearby');
 const connectionStatus = document.querySelector('#connection-status');
-function updateLegend() {
-  const types = [...new Set([...world.entities.values()].map(object => object.userData.entity.type))].slice(0, 6);
+const legendEntityTypes = new Map();
+const legendTypeCounts = new Map();
+let displayedLegendTypes = [];
+function renderLegend() {
+  const types = [...legendTypeCounts.keys()].slice(0, 6);
+  if (types.length === displayedLegendTypes.length && types.every((type, index) => type === displayedLegendTypes[index])) return;
+  displayedLegendTypes = types;
   nearby.replaceChildren(...types.map(type => {
     const row = document.createElement('div'); row.className = 'person';
     const face = document.createElement('span'); face.className = 'face'; face.textContent = '◆';
     row.append(face, document.createTextNode(type)); return row;
   }));
+}
+function resetLegend() {
+  legendEntityTypes.clear(); legendTypeCounts.clear();
+  for (const [id, object] of world.entities) {
+    const type = object.userData.entity.type;
+    legendEntityTypes.set(id, type);
+    legendTypeCounts.set(type, (legendTypeCounts.get(type) || 0) + 1);
+  }
+  renderLegend();
+}
+function updateLegendEntity(id) {
+  const previousType = legendEntityTypes.get(id);
+  const nextType = world.entities.get(id)?.userData.entity.type;
+  if (previousType === nextType) return;
+  if (previousType) {
+    const count = legendTypeCounts.get(previousType) - 1;
+    if (count) legendTypeCounts.set(previousType, count); else legendTypeCounts.delete(previousType);
+    legendEntityTypes.delete(id);
+  }
+  if (nextType) {
+    legendEntityTypes.set(id, nextType);
+    legendTypeCounts.set(nextType, (legendTypeCounts.get(nextType) || 0) + 1);
+  }
+  renderLegend();
 }
 function setConnectionStatus(status) {
   const labels = {
@@ -34,8 +63,8 @@ function setConnectionStatus(status) {
   connectionStatus.querySelector('.status-label').textContent = labels[status] || 'World stream unavailable';
 }
 connectWorldStream({
-  onSnapshot(entities) { world.replaceEntities(entities); updateLegend(); },
-  onEntity(entity) { world.handleEntity(entity); updateLegend(); },
+  onSnapshot(entities) { world.replaceEntities(entities); resetLegend(); },
+  onEntity(entity) { world.handleEntity(entity); updateLegendEntity(entity.id); },
   onStatus: setConnectionStatus,
 });
 
