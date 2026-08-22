@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { ORIGINAL_TEXTURES } from './originalTextures.js';
 import { InstanceBatchRegistry } from './instanceBatches.js';
 
-const EMOJI_DATA_URL = new URL('./assets/emoji-apple-14.0.0.json', import.meta.url).href;
-const EMOJI_SHEET_URL = new URL('./assets/emoji-apple-14.0.0.png', import.meta.url).href;
+const EMOJI_DATA_URL = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@14.0.0/emoji.json';
+const EMOJI_SHEET_URL = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@14.0.0/img/apple/sheets-256/64.png';
 const EMOJI_SIZE = 64;
 const EMOJI_CELL_SIZE = EMOJI_SIZE + 2;
 
@@ -51,7 +51,7 @@ export async function loadWorldAssets() {
       if (!response.ok) throw new Error(`Could not load emoji data (${response.status})`);
       return response.json();
     }),
-    loadImage(EMOJI_SHEET_URL),
+    loadImage(EMOJI_SHEET_URL, true),
   ]);
   loadedAssets = { ...Object.fromEntries(assets), emojiSheet };
   emojiSprites = indexEmojiSprites(emojiData);

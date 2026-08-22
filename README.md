@@ -46,9 +46,9 @@ uvx rodney stop
 
 Snapshots replace the renderer's entire entity set; entity messages are incremental. The exported `FIXTURE_WORLD` remains available for renderer development and tests, but the application starts with an empty scene and waits for the shared stream.
 
-Static renderer assets are stored in `src/assets`; the browser does not fetch
-sky, emoji, or font assets from third-party hosts. Source revisions and file
-checksums are recorded alongside the vendored files.
+Sky textures are stored in `src/assets`, and UI fonts are installed from npm,
+so those assets do not rely on third-party hosts at runtime. Source revisions
+and file checksums are recorded alongside the vendored files.
 
 Emoji artwork comes from the Apple sprite sheet in
 [`emoji-datasource-apple`](https://github.com/iamcal/emoji-data). Apple emoji
