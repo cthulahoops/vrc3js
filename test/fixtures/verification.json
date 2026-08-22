@@ -1,0 +1,13 @@
+{
+  "entities": [
+    { "id": "wall-a", "type": "Wall", "pos": { "x": 0, "y": 0 }, "color": "blue", "wall_text": "A" },
+    { "id": "desk-1", "type": "Desk", "pos": { "x": 1, "y": 3 } },
+    { "id": "bot-1", "type": "Bot", "pos": { "x": 3, "y": 3 }, "emoji": "🚀", "name": "Rocket" }
+  ],
+  "camera": {
+    "position": { "x": 5.5, "y": 3.5, "z": 11 },
+    "orientation": { "yaw": 0.35, "pitch": -0.3, "roll": 0 },
+    "fov": 62
+  },
+  "time": "2021-06-20T16:00:00Z"
+}

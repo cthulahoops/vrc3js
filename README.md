@@ -21,18 +21,28 @@ The development BFF intentionally has no user authentication. It accepts browser
 
 ## Screenshots
 
-Use [Rodney](https://github.com/simonw/rodney) for browser checks and screenshots.
-The `screenshot` query parameter renders a static camera and exposes a ready
-marker after WebGL finishes, so Rodney cannot capture a partial frame:
+The Playwright verifier accepts protocol-shaped entities, camera position and
+orientation (yaw/pitch/roll in radians), and an ISO sky time in a JSON fixture.
+Install its managed Chromium once after installing dependencies:
 
 ```bash
-uvx rodney start
-uvx rodney open 'http://localhost:5173/?screenshot=1'
-uvx rodney wait '[data-render-ready="true"]'
-uvx rodney click '#enter'
-uvx rodney screenshot -w 1440 -h 900 /tmp/vrc3d.png
-uvx rodney stop
+npx playwright install chromium
 ```
+
+The command starts an isolated Vite server and browser context, bypasses the
+live world stream, waits for WebGL and browser presentation to complete, and
+writes a screenshot:
+
+```bash
+npm run verify:screenshot -- test/fixtures/verification.json /tmp/vrc3d.png
+# Optional viewport: ... /tmp/vrc3d.png 1920 1080
+```
+
+See `test/fixtures/verification.json` for the fixture contract. Invalid entities,
+camera values, FOV, or dates fail before a frame is marked ready. This path
+exercises the browser-facing entity protocol and real renderer; it deliberately
+does not open the live WebSocket, keeping visual verification independent of RC
+credentials and upstream state.
 
 ## Renderer boundary
 

@@ -11,7 +11,14 @@ import type { EntityId } from '../server/protocol.js';
 import { applyRenderQuality, createAdaptivePixelRatio } from './renderQuality.js';
 import { buildWorld, loadWorldAssets } from './world.js';
 import { Skybox } from './skybox.js';
+import { parseVerificationFixture } from './verification.js';
 import './style.css';
+
+declare global {
+  interface Window {
+    __VRC3D_VERIFY__?: { render(fixture: unknown): void };
+  }
+}
 
 function requiredElement<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -20,7 +27,9 @@ function requiredElement<T extends Element>(selector: string): T {
 }
 
 const canvas = requiredElement<HTMLCanvasElement>('#world');
-const screenshotMode = new URLSearchParams(location.search).has('screenshot');
+const query = new URLSearchParams(location.search);
+const verificationMode = query.has('verify');
+const screenshotMode = query.has('screenshot') || verificationMode;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: screenshotMode });
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;
 const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(62, 1, .1, 100); camera.position.set(5.5,.6,11);
@@ -91,17 +100,22 @@ function setConnectionStatus(status: ConnectionStatus) {
     connected: 'World stream connected', connecting: 'Connecting to world',
     reconnecting: 'Reconnecting to world', disconnected: 'World stream disconnected',
     unconfigured: 'RC credentials required',
+    verification: 'Verification fixture',
   };
   connectionStatus.dataset.state = status;
   requiredElement<HTMLElement>('#connection-status .status-label').textContent = labels[status] || 'World stream unavailable';
 }
-connectWorldStream({
+const streamHandlers = {
   onSnapshot(entities) { world.replaceEntities(entities); resetLegend(); renderer.shadowMap.needsUpdate = true; if (screenshotMode) renderScreenshot(); },
   onEntity(entity) { world.handleEntity(entity); updateLegendEntity(entity.id); renderer.shadowMap.needsUpdate = true; if (screenshotMode) renderScreenshot(); },
   onStatus: setConnectionStatus,
-});
+} satisfies Parameters<typeof connectWorldStream>[0];
+if (verificationMode) setConnectionStatus('verification');
+else connectWorldStream(streamHandlers);
 
 let yaw = 0, pitch = -.04, active = false; const keys = new Set(); const clock = new THREE.Clock();
+let verificationHasFixture = false;
+let verificationFramesUntilReady = 0;
 const welcome = requiredElement<HTMLElement>('#welcome');
 const hint = requiredElement<HTMLElement>('#hint');
 function lock() { canvas.requestPointerLock(); welcome.classList.add('hidden'); }
@@ -110,7 +124,45 @@ document.addEventListener('pointerlockchange',()=>{ active=document.pointerLockE
 document.addEventListener('mousemove',e=>{ if(!active)return; yaw-=e.movementX*.0018; pitch=Math.max(-1.25,Math.min(1.25,pitch-e.movementY*.0018)); });
 window.addEventListener('keydown',e=>keys.add(e.code)); window.addEventListener('keyup',e=>keys.delete(e.code));
 function renderScreenshot(){ renderer.render(scene, camera); renderer.getContext().finish(); document.body.dataset.renderReady = 'true'; }
-function resize(){ const w=innerWidth,h=innerHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); if(screenshotMode) renderScreenshot(); } addEventListener('resize',resize); resize();
+function resize(){ const w=innerWidth,h=innerHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); if(screenshotMode && !verificationMode) renderScreenshot(); } addEventListener('resize',resize); resize();
 function updateSkybox(){ if(!skybox.update())return; const visibilityChanged=shadowSunVisible!==sun.visible; if(visibilityChanged||(sun.visible&&shadowSunDirection.angleTo(skybox.sunDirection)>=shadowSunThreshold)){ shadowSunDirection.copy(skybox.sunDirection); shadowSunVisible=sun.visible; renderer.shadowMap.needsUpdate=true; } }
 function animate(){ requestAnimationFrame(animate); const frameDelta=clock.getDelta(); const dt=Math.min(frameDelta,.05); adaptivePixelRatio?.reportFrame(frameDelta); updateSkybox(); camera.rotation.set(pitch,yaw,0,'YXZ'); const forward=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw)); const right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw)); const move=new THREE.Vector3(); if(keys.has('KeyW')||keys.has('ArrowUp'))move.add(forward); if(keys.has('KeyS')||keys.has('ArrowDown'))move.sub(forward); if(keys.has('KeyD')||keys.has('ArrowRight'))move.add(right); if(keys.has('KeyA')||keys.has('ArrowLeft'))move.sub(right); if(move.lengthSq())camera.position.addScaledVector(move.normalize(),dt*(keys.has('ShiftLeft')?7:4)); renderer.render(scene,camera); }
-if (screenshotMode) renderScreenshot(); else animate();
+function animateVerification(){
+  requestAnimationFrame(animateVerification);
+  if (!verificationHasFixture) return;
+  renderer.render(scene, camera);
+  renderer.getContext().finish();
+  if (verificationFramesUntilReady > 0 && --verificationFramesUntilReady === 0) {
+    document.body.dataset.renderReady = 'true';
+  }
+}
+if (verificationMode) {
+  welcome.classList.add('hidden');
+  window.__VRC3D_VERIFY__ = {
+    render(input) {
+      delete document.body.dataset.renderReady;
+      delete document.body.dataset.renderError;
+      try {
+        const fixture = parseVerificationFixture(input);
+        world.replaceEntities(fixture.entities);
+        resetLegend();
+        camera.position.set(fixture.camera.position.x, fixture.camera.position.y, fixture.camera.position.z);
+        const { pitch: fixturePitch, yaw: fixtureYaw, roll } = fixture.camera.orientation;
+        camera.rotation.set(fixturePitch, fixtureYaw, roll, 'YXZ');
+        camera.fov = fixture.camera.fov ?? 62;
+        camera.updateProjectionMatrix();
+        skybox.update(fixture.time, true);
+        renderer.shadowMap.needsUpdate = true;
+        verificationHasFixture = true;
+        // One frame submits WebGL work and the next gives the browser compositor
+        // a presentation opportunity before Playwright observes the ready marker.
+        verificationFramesUntilReady = 2;
+      } catch (error) {
+        document.body.dataset.renderError = error instanceof Error ? error.message : String(error);
+        throw error;
+      }
+    },
+  };
+  document.body.dataset.verificationReady = 'true';
+  animateVerification();
+} else if (screenshotMode) renderScreenshot(); else animate();
