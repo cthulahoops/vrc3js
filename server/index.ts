@@ -1,4 +1,5 @@
 import { decodeActionCableMessage } from "./protocol.js";
+import type { EntityUpdate } from "./protocol.js";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import {
   createSession,
@@ -18,7 +19,7 @@ function randomToken() {
   return randomBytes(32).toString("base64url");
 }
 
-function tokensMatch(left, right) {
+function tokensMatch(left: string | null | undefined, right: string | null | undefined): boolean {
   if (!left || !right) return false;
 
   const leftBytes = Buffer.from(left);
@@ -30,7 +31,12 @@ function tokensMatch(left, right) {
   );
 }
 
-async function exchangeAuthorizationCode(code) {
+interface OAuthTokenResponse { access_token?: unknown; error?: unknown; [key: string]: unknown }
+
+async function exchangeAuthorizationCode(code: string): Promise<OAuthTokenResponse> {
+  if (!oauthClientId || !oauthClientSecret || !oauthRedirectUri) {
+    throw new Error("OAuth is not configured");
+  }
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
@@ -48,10 +54,10 @@ async function exchangeAuthorizationCode(code) {
     body,
   });
 
-  const result = await response.json().catch(() => null);
+  const result = await response.json().catch(() => null) as OAuthTokenResponse | null;
 
   if (!response.ok) {
-    const oauthError = result?.error || `HTTP ${response.status}`;
+    const oauthError = typeof result?.error === "string" ? result.error : `HTTP ${response.status}`;
     throw new Error(`Recurse token exchange failed: ${oauthError}`);
   }
 
@@ -72,10 +78,10 @@ const upstreamMaxPayloadBytes = configuredMaxPayload;
 const reconnectMinimumMs = 1_000;
 const reconnectMaximumMs = 30_000;
 const subscriptionIdentifier = JSON.stringify({ channel: "ApiChannel" });
-const world = new Map();
+const world = new Map<string, EntityUpdate>();
 let hasSnapshot = false;
-let upstream;
-let reconnectTimer;
+let upstream: WebSocket | undefined;
+let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 let reconnectDelay = reconnectMinimumMs;
 let shuttingDown = false;
 let upstreamStatus = "connecting";
@@ -87,41 +93,41 @@ const configuredOrigins = new Set(
     .filter(Boolean),
 );
 
-function isAllowedOrigin(origin) {
-  if (configuredOrigins.size) return configuredOrigins.has(origin);
+function isAllowedOrigin(origin: string | null): boolean {
+  if (configuredOrigins.size) return origin !== null && configuredOrigins.has(origin);
   return (
     origin === "http://127.0.0.1:5173" || origin === "http://localhost:5173"
   );
 }
 
-function encode(message) {
+function encode(message: unknown): string {
   return JSON.stringify(message);
 }
 
-const browserClients = new Set();
+const browserClients = new Set<Bun.ServerWebSocket<undefined>>();
 
-function send(client, message) {
+function send(client: Bun.ServerWebSocket<undefined>, message: unknown): void {
   if (client.readyState === WebSocket.OPEN) client.send(encode(message));
 }
 
-function broadcast(message) {
+function broadcast(message: unknown): void {
   const encoded = encode(message);
   for (const client of browserClients) {
     if (client.readyState === WebSocket.OPEN) client.send(encoded);
   }
 }
 
-function replaceWorld(entities) {
+function replaceWorld(entities: EntityUpdate[]): void {
   world.clear();
   for (const entity of entities) {
-    if (!entity.deleted) world.set(entity.id, entity);
+    if (!("deleted" in entity)) world.set(entity.id, entity);
   }
   hasSnapshot = true;
   broadcast({ type: "snapshot", entities: [...world.values()] });
 }
 
-function updateWorld(entity) {
-  if (entity.deleted) world.delete(entity.id);
+function updateWorld(entity: EntityUpdate): void {
+  if ("deleted" in entity) world.delete(entity.id);
   else world.set(entity.id, entity);
   broadcast({ type: "entity", entity });
 }
@@ -163,11 +169,15 @@ function connectUpstream() {
 
   upstreamStatus = "connecting";
   broadcast({ type: "status", status: upstreamStatus });
-  upstream = new WebSocket(config.url, {
+  const WebSocketWithOptions = WebSocket as unknown as {
+    new(url: string, options: Bun.WebSocketOptions): WebSocket;
+  };
+  upstream = new WebSocketWithOptions(config.url, {
     headers: { Origin: config.origin },
   });
 
-  upstream.onmessage = (event) => {
+  const connectedSocket = upstream;
+  connectedSocket.onmessage = (event) => {
     const raw = event.data;
     const size =
       typeof raw === "string" ? Buffer.byteLength(raw) : raw.byteLength;
@@ -175,13 +185,13 @@ function connectUpstream() {
       console.error(
         `Upstream world message exceeded RC_MAX_PAYLOAD_BYTES (${upstreamMaxPayloadBytes} bytes).`,
       );
-      upstream.close();
+      connectedSocket.close();
       return;
     }
 
     const message = decodeActionCableMessage(raw, subscriptionIdentifier);
     if (message.kind === "welcome") {
-      upstream.send(
+      connectedSocket.send(
         encode({ command: "subscribe", identifier: subscriptionIdentifier }),
       );
     } else if (message.kind === "confirmed") {
@@ -189,7 +199,7 @@ function connectUpstream() {
       broadcast({ type: "status", status: upstreamStatus });
     } else if (message.kind === "rejected") {
       console.error("RC Together rejected the Action Cable subscription.");
-      upstream.close();
+      connectedSocket.close();
     } else if (message.kind === "snapshot") {
       reconnectDelay = reconnectMinimumMs;
       replaceWorld(message.entities);
@@ -199,13 +209,14 @@ function connectUpstream() {
       console.warn("Dropped an invalid upstream message.");
     }
   };
-  upstream.onerror = (event) => {
+  connectedSocket.onerror = (event) => {
+    const errorEvent = event as ErrorEvent;
     console.error(
-      `Upstream WebSocket error: ${event.message || event.error?.message || "unknown"}`,
+      `Upstream WebSocket error: ${errorEvent.message || String(errorEvent.error || "unknown")}`,
     );
     scheduleReconnect();
   };
-  upstream.onclose = scheduleReconnect;
+  connectedSocket.onclose = scheduleReconnect;
 }
 
 const server = Bun.serve({
@@ -277,18 +288,18 @@ const server = Bun.serve({
             sameSite: "lax",
             path: "/",
             maxAge: sessionMaxAgeSeconds,
-            secure: oauthRedirectUri?.startsWith("https:"),
+            secure: Boolean(oauthRedirectUri?.startsWith("https:")),
           });
 
           return new Response(null, {
             status: 302,
             headers: {
-              location: appOrigin,
+              location: appOrigin ?? "/",
               "cache-control": "no-store",
             },
           });
         } catch (error) {
-          console.error(`OAuth callback failed: ${error.message}`);
+          console.error(`OAuth callback failed: ${error instanceof Error ? error.message : String(error)}`);
 
           return new Response("Could not complete Recurse authorization", {
             status: 502,
@@ -347,7 +358,7 @@ connectUpstream();
 
 function shutdown() {
   shuttingDown = true;
-  clearTimeout(reconnectTimer);
+  if (reconnectTimer) clearTimeout(reconnectTimer);
   upstream?.close();
   for (const client of browserClients)
     client.close(1001, "Server shutting down");

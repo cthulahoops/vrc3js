@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import process from "node:process";
 
 const commands = [
-  spawn("bun", ["server/index.js"], { stdio: "inherit", env: process.env }),
+  spawn("bun", ["server/index.ts"], { stdio: "inherit", env: process.env }),
   spawn(
     process.execPath,
     ["node_modules/vite/bin/vite.js", "--host", "localhost"],
@@ -11,7 +11,7 @@ const commands = [
 ];
 
 let stopping = false;
-function stop(signal = "SIGTERM") {
+function stop(signal: NodeJS.Signals = "SIGTERM") {
   if (stopping) return;
   stopping = true;
   for (const child of commands) child.kill(signal);

@@ -8,10 +8,10 @@ import {
 } from '../src/renderQuality.js';
 
 test('interactive quality caps DPR and halves each shadow-map dimension', () => {
-  const ratios = [];
-  const sizes = [];
-  const renderer = { setPixelRatio: ratio => ratios.push(ratio) };
-  const sun = { shadow: { mapSize: { set: (...size) => sizes.push(size) } } };
+  const ratios: number[] = [];
+  const sizes: number[][] = [];
+  const renderer = { setPixelRatio: (ratio: number) => ratios.push(ratio) };
+  const sun = { shadow: { mapSize: { set: (...size: number[]) => sizes.push(size) } } };
 
   const quality = applyRenderQuality(renderer, sun, { devicePixelRatio: 3 });
 
@@ -35,7 +35,7 @@ test('pixel ratio adjustments use a dead band and respect limits', () => {
 });
 
 test('adaptive controller responds only to sustained frame time', () => {
-  const ratios = [];
+  const ratios: number[] = [];
   const controller = createAdaptivePixelRatio(
     { setPixelRatio: ratio => ratios.push(ratio) },
     { initialPixelRatio: 1.5, maximumPixelRatio: 1.5, sampleFrames: 4, settleFrames: 0 },

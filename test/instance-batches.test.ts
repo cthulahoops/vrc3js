@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { InstanceBatch, InstanceBatchRegistry } from '../src/instanceBatches.js';
 
-function translation(x, y = 0, z = 0) {
+function translation(x: number, y = 0, z = 0): THREE.Matrix4 {
   return new THREE.Matrix4().makeTranslation(x, y, z);
 }
 
-function position(batch, key) {
+function position(batch: InstanceBatch, key: unknown): number[] | null {
   const matrix = batch.getMatrix(key);
   return matrix && new THREE.Vector3().setFromMatrixPosition(matrix).toArray();
 }
@@ -24,7 +24,7 @@ test('an instance batch retains one mesh while matrices are updated', () => {
   assert.strictEqual(batch.mesh, mesh);
   assert.equal(batch.size, 2);
   assert.deepEqual(position(batch, 'a'), [7, 0, 3]);
-  assert.equal(scene.children.filter(child => child.isInstancedMesh).length, 1);
+  assert.equal(scene.children.filter(child => child instanceof THREE.InstancedMesh).length, 1);
 });
 
 test('capacity growth preserves instances and replaces only the batch mesh', () => {
@@ -65,7 +65,7 @@ test('registry moves a component between material buckets without retaining an e
   registry.set('wall:body', { bucketKey: 'wall-pink', geometry, material: pink, matrix: translation(2) });
 
   assert.equal(registry.batches.has('wall-blue'), false);
-  assert.equal(registry.batches.get('wall-pink').size, 1);
+  assert.equal(registry.batches.get('wall-pink')!.size, 1);
   assert.equal(registry.locations.get('wall:body'), 'wall-pink');
 });
 
@@ -107,11 +107,11 @@ test('instance colors survive growth and follow slots during compaction', () => 
   batch.set('blue', translation(3), new THREE.Color('blue'));
 
   const color = new THREE.Color();
-  batch.mesh.getColorAt(batch.indices.get('green'), color);
+  batch.mesh.getColorAt(batch.indices.get('green')!, color);
   assert.equal(color.getHexString(), '008000');
   batch.delete('red');
-  batch.mesh.getColorAt(batch.indices.get('blue'), color);
+  batch.mesh.getColorAt(batch.indices.get('blue')!, color);
   assert.equal(color.getHexString(), '0000ff');
-  assert.equal(batch.mesh.instanceColor.needsUpdate, undefined);
-  assert.ok(batch.mesh.instanceColor.version > 0);
+  assert.equal(batch.mesh.instanceColor!.needsUpdate, undefined);
+  assert.ok(batch.mesh.instanceColor!.version > 0);
 });
