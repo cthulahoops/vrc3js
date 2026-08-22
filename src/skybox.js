@@ -4,9 +4,10 @@ import { Body, Equator, Horizon, Observer, SiderealTime } from 'astronomy-engine
 // The location used by the original renderer (Bridge Street, Brooklyn).
 export const SKY_LOCATION = Object.freeze({ latitude: 39.6913, longitude: -73.985 });
 
-// Keep the original art pinned to the upstream revision this port is based on.
-const UPSTREAM_ASSET_ROOT =
-  'https://raw.githubusercontent.com/cthulahoops/vrc3d/8b057126f6eb8ba5e42e3660351970d08b0d2189/textures';
+// Keep the original art in this repository so rendering does not depend on
+// the availability or CORS policy of the upstream project.
+const STAR_MAP_URL = new URL('./assets/starmap.png', import.meta.url).href;
+const MOON_MAP_URL = new URL('./assets/moon.png', import.meta.url).href;
 
 // Atmospheric scattering is smooth across the dome. Evaluating the upstream
 // integration at mesh vertices preserves its model and constants without
@@ -209,8 +210,8 @@ function loadTexture(url) {
 export class Skybox {
   static async create(scene, options = {}) {
     const [starMap, moonMap] = await Promise.all([
-      loadTexture(options.starMapUrl ?? `${UPSTREAM_ASSET_ROOT}/starmap.png`),
-      loadTexture(options.moonMapUrl ?? `${UPSTREAM_ASSET_ROOT}/moon.png`),
+      loadTexture(options.starMapUrl ?? STAR_MAP_URL),
+      loadTexture(options.moonMapUrl ?? MOON_MAP_URL),
     ]);
     return new Skybox(scene, { ...options, starMap, moonMap });
   }

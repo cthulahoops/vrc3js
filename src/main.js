@@ -1,5 +1,10 @@
 import * as THREE from 'three';
 import emojiFontUrl from '@fontsource/noto-color-emoji/files/noto-color-emoji-5-400-normal.woff2?url';
+import '@fontsource/manrope/latin-400.css';
+import '@fontsource/manrope/latin-600.css';
+import '@fontsource/manrope/latin-700.css';
+import '@fontsource/dm-mono/latin-400.css';
+import '@fontsource/dm-mono/latin-500.css';
 import { connectWorldStream } from './network.js';
 import { applyRenderQuality, createAdaptivePixelRatio } from './renderQuality.js';
 import { buildWorld, loadWorldAssets } from './world.js';
