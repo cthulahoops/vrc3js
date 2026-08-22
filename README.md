@@ -11,13 +11,13 @@ export RC_APP_SECRET=<app_secret>
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173`, select **Enter world**, then use the mouse to look and WASD to move. Press Escape to release the mouse. Set `RC_ENDPOINT` to override the default `recurse.rctogether.com` upstream host.
+Open `http://localhost:5173`, select **Enter world**, then use the mouse to look and WASD to move. Press Escape to release the mouse. Set `RC_ENDPOINT` to override the default `recurse.rctogether.com` upstream host.
 
 The upstream WebSocket accepts world snapshots up to 16 MiB by default. Set `RC_MAX_PAYLOAD_BYTES` to a larger byte count if the configured world requires it.
 
-`npm run dev` starts Vite and the BFF on loopback only. Vite proxies `/api/world` WebSocket upgrades to the BFF at `127.0.0.1:8787`. To run them independently, use `npm run dev:web` and `npm run dev:bff`; `BFF_HOST`, `BFF_PORT`, and the Vite proxy must agree if those defaults are changed.
+`npm run dev` starts Vite and the BFF on loopback only. Vite proxies `/api/world` WebSocket upgrades to the BFF at `localhost:8787`. To run them independently, use `npm run dev:web` and `npm run dev:bff`; `BFF_HOST`, `BFF_PORT`, and the Vite proxy must agree if those defaults are changed.
 
-The development BFF intentionally has no user authentication. It accepts browser connections only from `http://127.0.0.1:5173` and `http://localhost:5173` by default. `BFF_ALLOWED_ORIGINS` can provide a comma-separated exact allowlist, but authentication and HTTPS are required before exposing the service beyond localhost. RC credentials remain server-side and must never use Vite's client-visible `VITE_*` environment variables.
+The development BFF intentionally has no user authentication. It accepts browser connections only from `http://localhost:5173` and `http://localhost:5173` by default. `BFF_ALLOWED_ORIGINS` can provide a comma-separated exact allowlist, but authentication and HTTPS are required before exposing the service beyond localhost. RC credentials remain server-side and must never use Vite's client-visible `VITE_*` environment variables.
 
 ## Screenshots
 
@@ -27,7 +27,7 @@ marker after WebGL finishes, so Rodney cannot capture a partial frame:
 
 ```bash
 uvx rodney start
-uvx rodney open 'http://127.0.0.1:5173/?screenshot=1'
+uvx rodney open 'http://localhost:5173/?screenshot=1'
 uvx rodney wait '[data-render-ready="true"]'
 uvx rodney click '#enter'
 uvx rodney screenshot -w 1440 -h 900 /tmp/vrc3d.png
