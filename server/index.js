@@ -321,6 +321,7 @@ const server = Bun.serve({
   },
 
   websocket: {
+    idleTimeout: 0,
     maxPayloadLength: 16_384,
 
     open(client) {
