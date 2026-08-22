@@ -1,5 +1,35 @@
 import * as THREE from 'three';
 import { Body, Equator, Horizon, Observer, SiderealTime } from 'astronomy-engine';
+import type { HorizontalCoordinates } from 'astronomy-engine';
+
+export interface SkyLocation { latitude: number; longitude: number }
+export interface SkyboxOptions {
+  starMapUrl?: string;
+  moonMapUrl?: string;
+  showGrid?: boolean;
+  showAtmosphere?: boolean;
+  location?: SkyLocation;
+  directionalLight?: THREE.DirectionalLight | null;
+  updateInterval?: number;
+  date?: Date;
+}
+
+interface LoadedSkyboxOptions extends Omit<SkyboxOptions, "starMapUrl" | "moonMapUrl"> {
+  starMap: THREE.Texture;
+  moonMap: THREE.Texture;
+}
+
+interface SkyUniforms {
+  [uniform: string]: THREE.IUniform<unknown>;
+  stars_array_sampler: THREE.IUniform<THREE.Texture>;
+  moon_array_sampler: THREE.IUniform<THREE.Texture>;
+  celestial_matrix: THREE.IUniform<THREE.Matrix4>;
+  moon_matrix: THREE.IUniform<THREE.Matrix4>;
+  sun_position: THREE.IUniform<THREE.Vector3>;
+  moon_position: THREE.IUniform<THREE.Vector3>;
+  show_grid: THREE.IUniform<boolean>;
+  show_atmosphere: THREE.IUniform<boolean>;
+}
 
 // The location used by the original renderer (Bridge Street, Brooklyn).
 export const SKY_LOCATION = Object.freeze({ latitude: 39.6913, longitude: -73.985 });
@@ -180,7 +210,7 @@ const fragmentShader = /* glsl */ `
   }
 `;
 
-function horizontalPosition(horizontal, target = new THREE.Vector3()) {
+function horizontalPosition(horizontal: HorizontalCoordinates, target = new THREE.Vector3()): THREE.Vector3 {
   const altitude = THREE.MathUtils.degToRad(horizontal.altitude);
   const azimuth = THREE.MathUtils.degToRad(horizontal.azimuth);
   return target.set(
@@ -190,14 +220,14 @@ function horizontalPosition(horizontal, target = new THREE.Vector3()) {
   );
 }
 
-function observe(body, date, observer) {
+function observe(body: Body, date: Date, observer: Observer): HorizontalCoordinates {
   const equatorial = Equator(body, date, observer, true, true);
   // Skyfield's altaz() call in the original does not apply atmospheric
   // refraction unless pressure/temperature are supplied.
   return Horizon(date, observer, equatorial.ra, equatorial.dec);
 }
 
-function loadTexture(url) {
+function loadTexture(url: string): Promise<THREE.Texture> {
   return new THREE.TextureLoader().loadAsync(url).then(texture => {
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
@@ -208,7 +238,17 @@ function loadTexture(url) {
 }
 
 export class Skybox {
-  static async create(scene, options = {}) {
+  readonly scene: THREE.Scene;
+  readonly observer: Observer;
+  readonly location: SkyLocation;
+  readonly directionalLight: THREE.DirectionalLight | null;
+  readonly updateInterval: number;
+  lastUpdate = -Infinity;
+  readonly uniforms: SkyUniforms;
+  readonly material: THREE.ShaderMaterial;
+  readonly mesh: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
+
+  static async create(scene: THREE.Scene, options: SkyboxOptions = {}): Promise<Skybox> {
     const [starMap, moonMap] = await Promise.all([
       loadTexture(options.starMapUrl ?? STAR_MAP_URL),
       loadTexture(options.moonMapUrl ?? MOON_MAP_URL),
@@ -216,7 +256,7 @@ export class Skybox {
     return new Skybox(scene, { ...options, starMap, moonMap });
   }
 
-  constructor(scene, {
+  constructor(scene: THREE.Scene, {
     starMap,
     moonMap,
     showGrid = false,
@@ -225,13 +265,12 @@ export class Skybox {
     directionalLight = null,
     updateInterval = 500,
     date = new Date(),
-  }) {
+  }: LoadedSkyboxOptions) {
     this.scene = scene;
     this.observer = new Observer(location.latitude, location.longitude, 0);
     this.location = location;
     this.directionalLight = directionalLight;
     this.updateInterval = updateInterval;
-    this.lastUpdate = -Infinity;
 
     this.uniforms = {
       stars_array_sampler: { value: starMap },
@@ -266,7 +305,7 @@ export class Skybox {
     this.update(date, true);
   }
 
-  update(date = new Date(), force = false) {
+  update(date = new Date(), force = false): boolean {
     const timestamp = date.getTime();
     if (!force && timestamp - this.lastUpdate < this.updateInterval) return false;
     this.lastUpdate = timestamp;
@@ -298,11 +337,11 @@ export class Skybox {
     return true;
   }
 
-  set showGrid(value) {
+  set showGrid(value: boolean) {
     this.uniforms.show_grid.value = value;
   }
 
-  set showAtmosphere(value) {
+  set showAtmosphere(value: boolean) {
     this.uniforms.show_atmosphere.value = value;
   }
 

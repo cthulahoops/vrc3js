@@ -3,7 +3,7 @@ import test from 'node:test';
 import * as THREE from 'three';
 import { Skybox } from '../src/skybox.js';
 
-function createSkybox(date) {
+function createSkybox(date: Date) {
   const scene = new THREE.Scene();
   const light = new THREE.DirectionalLight();
   scene.add(light);

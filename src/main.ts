@@ -6,12 +6,20 @@ import '@fontsource/manrope/latin-700.css';
 import '@fontsource/dm-mono/latin-400.css';
 import '@fontsource/dm-mono/latin-500.css';
 import { connectWorldStream } from './network.js';
+import type { ConnectionStatus } from './network.js';
+import type { EntityId } from '../server/protocol.js';
 import { applyRenderQuality, createAdaptivePixelRatio } from './renderQuality.js';
 import { buildWorld, loadWorldAssets } from './world.js';
 import { Skybox } from './skybox.js';
 import './style.css';
 
-const canvas = document.querySelector('#world');
+function requiredElement<T extends Element>(selector: string): T {
+  const element = document.querySelector<T>(selector);
+  if (!element) throw new Error(`Missing required element: ${selector}`);
+  return element;
+}
+
+const canvas = requiredElement<HTMLCanvasElement>('#world');
 const screenshotMode = new URLSearchParams(location.search).has('screenshot');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: screenshotMode });
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;
@@ -39,11 +47,11 @@ const shadowSunDirection = skybox.sunDirection.clone();
 const shadowSunThreshold = THREE.MathUtils.degToRad(.25);
 let shadowSunVisible = sun.visible;
 const world = buildWorld(scene, []);
-const nearby = document.querySelector('#nearby');
-const connectionStatus = document.querySelector('#connection-status');
-const legendEntityTypes = new Map();
-const legendTypeCounts = new Map();
-let displayedLegendTypes = [];
+const nearby = requiredElement<HTMLElement>('#nearby');
+const connectionStatus = requiredElement<HTMLElement>('#connection-status');
+const legendEntityTypes = new Map<EntityId, string>();
+const legendTypeCounts = new Map<string, number>();
+let displayedLegendTypes: string[] = [];
 function renderLegend() {
   const types = [...legendTypeCounts.keys()].slice(0, 6);
   if (types.length === displayedLegendTypes.length && types.every((type, index) => type === displayedLegendTypes[index])) return;
@@ -57,18 +65,18 @@ function renderLegend() {
 function resetLegend() {
   legendEntityTypes.clear(); legendTypeCounts.clear();
   for (const [id, object] of world.entities) {
-    const type = object.userData.entity.type;
+    const type = object.userData.entity!.type;
     legendEntityTypes.set(id, type);
     legendTypeCounts.set(type, (legendTypeCounts.get(type) || 0) + 1);
   }
   renderLegend();
 }
-function updateLegendEntity(id) {
+function updateLegendEntity(id: EntityId) {
   const previousType = legendEntityTypes.get(id);
-  const nextType = world.entities.get(id)?.userData.entity.type;
+  const nextType = world.entities.get(id)?.userData.entity?.type;
   if (previousType === nextType) return;
   if (previousType) {
-    const count = legendTypeCounts.get(previousType) - 1;
+    const count = (legendTypeCounts.get(previousType) ?? 0) - 1;
     if (count) legendTypeCounts.set(previousType, count); else legendTypeCounts.delete(previousType);
     legendEntityTypes.delete(id);
   }
@@ -78,14 +86,14 @@ function updateLegendEntity(id) {
   }
   renderLegend();
 }
-function setConnectionStatus(status) {
-  const labels = {
+function setConnectionStatus(status: ConnectionStatus) {
+  const labels: Record<string, string> = {
     connected: 'World stream connected', connecting: 'Connecting to world',
     reconnecting: 'Reconnecting to world', disconnected: 'World stream disconnected',
     unconfigured: 'RC credentials required',
   };
   connectionStatus.dataset.state = status;
-  connectionStatus.querySelector('.status-label').textContent = labels[status] || 'World stream unavailable';
+  requiredElement<HTMLElement>('#connection-status .status-label').textContent = labels[status] || 'World stream unavailable';
 }
 connectWorldStream({
   onSnapshot(entities) { world.replaceEntities(entities); resetLegend(); renderer.shadowMap.needsUpdate = true; if (screenshotMode) renderScreenshot(); },
@@ -94,11 +102,13 @@ connectWorldStream({
 });
 
 let yaw = 0, pitch = -.04, active = false; const keys = new Set(); const clock = new THREE.Clock();
-function lock() { canvas.requestPointerLock(); document.querySelector('#welcome').classList.add('hidden'); }
-document.querySelector('#enter').addEventListener('click', lock); canvas.addEventListener('click', () => { if (document.querySelector('#welcome').classList.contains('hidden')) lock(); });
-document.addEventListener('pointerlockchange',()=>{ active=document.pointerLockElement===canvas; document.body.classList.toggle('active',active); document.querySelector('#hint').textContent=active?'WASD to move · ESC to release':'Click anywhere to look around · WASD to move'; });
+const welcome = requiredElement<HTMLElement>('#welcome');
+const hint = requiredElement<HTMLElement>('#hint');
+function lock() { canvas.requestPointerLock(); welcome.classList.add('hidden'); }
+requiredElement<HTMLElement>('#enter').addEventListener('click', lock); canvas.addEventListener('click', () => { if (welcome.classList.contains('hidden')) lock(); });
+document.addEventListener('pointerlockchange',()=>{ active=document.pointerLockElement===canvas; document.body.classList.toggle('active',active); hint.textContent=active?'WASD to move · ESC to release':'Click anywhere to look around · WASD to move'; });
 document.addEventListener('mousemove',e=>{ if(!active)return; yaw-=e.movementX*.0018; pitch=Math.max(-1.25,Math.min(1.25,pitch-e.movementY*.0018)); });
-addEventListener('keydown',e=>keys.add(e.code)); addEventListener('keyup',e=>keys.delete(e.code));
+window.addEventListener('keydown',e=>keys.add(e.code)); window.addEventListener('keyup',e=>keys.delete(e.code));
 function renderScreenshot(){ renderer.render(scene, camera); renderer.getContext().finish(); document.body.dataset.renderReady = 'true'; }
 function resize(){ const w=innerWidth,h=innerHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); if(screenshotMode) renderScreenshot(); } addEventListener('resize',resize); resize();
 function updateSkybox(){ if(!skybox.update())return; const visibilityChanged=shadowSunVisible!==sun.visible; if(visibilityChanged||(sun.visible&&shadowSunDirection.angleTo(skybox.sunDirection)>=shadowSunThreshold)){ shadowSunDirection.copy(skybox.sunDirection); shadowSunVisible=sun.visible; renderer.shadowMap.needsUpdate=true; } }

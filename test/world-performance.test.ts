@@ -1,17 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
+import type { WallEntity } from '../server/protocol.js';
+import type { InstanceBatch } from '../src/instanceBatches.js';
+import type { EntityHandle, VirtualRcRenderer as VirtualRcRendererType } from '../src/world.js';
 
 // CanvasTexture only needs a canvas-shaped object when it is not uploaded to a
 // WebGL context. This keeps the retained-renderer tests fast and independent of
 // a browser or native canvas package.
-globalThis.document ??= {
-  createElement(tag) {
+if (!globalThis.document) Object.defineProperty(globalThis, 'document', { value: {
+  createElement(tag: string) {
     assert.equal(tag, 'canvas');
     return {
       width: 0,
       height: 0,
-      getContext(type) {
+      getContext(type: string) {
         assert.equal(type, '2d');
         return {
           fillStyle: '',
@@ -25,7 +28,7 @@ globalThis.document ??= {
       },
     };
   },
-};
+} as unknown as Document });
 
 const { FIXTURE_WORLD, VirtualRcRenderer } = await import('../src/world.js');
 
@@ -34,7 +37,7 @@ function makeRenderer() {
   return { scene, renderer: new VirtualRcRenderer(scene) };
 }
 
-function wall(id, x = 0, overrides = {}) {
+function wall(id: string, x = 0, overrides: Partial<Omit<WallEntity, 'id' | 'type'>> = {}): WallEntity {
   return {
     id,
     type: 'Wall',
@@ -45,10 +48,14 @@ function wall(id, x = 0, overrides = {}) {
   };
 }
 
-function firstBatch(renderer, object) {
-  const component = object.userData.components[0];
+function firstBatch(renderer: VirtualRcRendererType, object: EntityHandle | undefined): InstanceBatch {
+  assert.ok(object);
+  const component = object.userData.components?.[0];
+  assert.ok(component);
   const bucketKey = renderer.instanceBatches.locations.get(component.key);
-  return renderer.instanceBatches.batches.get(bucketKey);
+  const batch = renderer.instanceBatches.batches.get(bucketKey);
+  assert.ok(batch);
+  return batch;
 }
 
 test('an identical entity update does not replace its render object or resources', () => {
@@ -78,11 +85,12 @@ test('a position-only update mutates the transform and retains resources', () =>
   const after = renderer.entities.get('wall-1');
   const batchAfter = firstBatch(renderer, after);
   assert.strictEqual(after, before);
-  assert.deepEqual(after.position.toArray(), [7, 0, 3]);
-  assert.deepEqual(after.userData.entity.pos, { x: 7, y: 3 });
+  assert.deepEqual(after!.position.toArray(), [7, 0, 3]);
+  assert.deepEqual(after!.userData.entity!.pos, { x: 7, y: 3 });
   assert.strictEqual(batchAfter, batchBefore);
   assert.equal(batchAfter.size, 1);
-  const matrix = batchAfter.getMatrix(after.userData.components[0].key);
+  const matrix = batchAfter.getMatrix(after!.userData.components![0]!.key);
+  assert.ok(matrix);
   assert.deepEqual(new THREE.Vector3().setFromMatrixPosition(matrix).toArray(), [7, .5, 3]);
 });
 
@@ -97,9 +105,9 @@ test('snapshot replacement reconciles by id instead of rebuilding the world', ()
 
   assert.strictEqual(renderer.entities.get('keep'), kept);
   assert.strictEqual(renderer.entities.get('move'), moved);
-  assert.deepEqual(moved.position.toArray(), [8, 0, 0]);
+  assert.deepEqual(moved!.position.toArray(), [8, 0, 0]);
   assert.equal(renderer.entities.has('remove'), false);
-  assert.equal(renderer.instanceBatches.locations.has(removed.userData.components[0].key), false);
+  assert.equal(renderer.instanceBatches.locations.has(removed!.userData.components![0]!.key), false);
   assert.equal(renderer.entities.has('add'), true);
   assert.deepEqual([...renderer.entities.keys()].sort(), ['add', 'keep', 'move']);
 });
@@ -112,7 +120,7 @@ test('an update that becomes non-renderable removes its previous object', () => 
   renderer.handleEntity({ id: 'bot-1', type: 'Bot', pos: { x: 1, y: 2 }, emoji: '👾' });
 
   assert.equal(renderer.entities.has('bot-1'), false);
-  assert.equal(renderer.instanceBatches.locations.has(previous.userData.components[0].key), false);
+  assert.equal(renderer.instanceBatches.locations.has(previous!.userData.components![0]!.key), false);
 });
 
 test('equivalent entities share immutable geometry, material, and texture resources', () => {
@@ -133,6 +141,8 @@ test('shared resources live until renderer disposal, not individual entity delet
   renderer.handleEntity(wall('wall-2', 2));
   const batch = firstBatch(renderer, renderer.entities.get('wall-1'));
   const disposeCounts = { geometry: 0, material: 0, texture: 0 };
+  assert.ok(batch.material instanceof THREE.MeshStandardMaterial);
+  assert.ok(batch.material.map);
   batch.geometry.addEventListener('dispose', () => { disposeCounts.geometry += 1; });
   batch.material.addEventListener('dispose', () => { disposeCounts.material += 1; });
   batch.material.map.addEventListener('dispose', () => { disposeCounts.texture += 1; });
@@ -163,9 +173,10 @@ test('a representative update stream keeps renderer resource cardinality bounded
   assert.ok(objects.every(object => object.position.z === 10));
   assert.equal(renderer.instanceBatches.batches.size, 1);
   const [batch] = renderer.instanceBatches.batches.values();
+  assert.ok(batch);
   assert.equal(batch.size, 100);
   assert.equal(batch.mesh.count, 100);
-  assert.equal(scene.children.filter(child => child.isInstancedMesh).length, 1);
+  assert.equal(scene.children.filter(child => child instanceof THREE.InstancedMesh).length, 1);
 });
 
 test('desks collapse all components and colors into one shared draw batch', () => {
@@ -175,7 +186,7 @@ test('desks collapse all components and colors into one shared draw batch', () =
 
   assert.equal(renderer.instanceBatches.batches.size, 1);
   assert.deepEqual([...renderer.instanceBatches.batches.values()].map(batch => batch.size), [10]);
-  assert.equal(scene.children.filter(child => child.isInstancedMesh).length, 1);
+  assert.equal(scene.children.filter(child => child instanceof THREE.InstancedMesh).length, 1);
 });
 
 test('different cube dimensions share a material batch through matrix scaling', () => {
@@ -189,6 +200,7 @@ test('different cube dimensions share a material batch through matrix scaling', 
 
   assert.equal(renderer.instanceBatches.batches.size, 1);
   const [batch] = renderer.instanceBatches.batches.values();
+  assert.ok(batch);
   assert.strictEqual(batch.material, renderer.instanceColorMaterial);
   assert.equal(batch.size, 2);
 });
@@ -198,8 +210,8 @@ test('fixture world batches its nineteen cube components into thirteen draws', (
   renderer.replaceEntities(FIXTURE_WORLD);
 
   const componentCount = [...renderer.entities.values()]
-    .reduce((total, handle) => total + handle.userData.components.length, 0);
+    .reduce((total, handle) => total + (handle.userData.components?.length ?? 0), 0);
   assert.equal(componentCount, 19);
   assert.equal(renderer.instanceBatches.batches.size, 13);
-  assert.equal(scene.children.filter(child => child.isInstancedMesh).length, 13);
+  assert.equal(scene.children.filter(child => child instanceof THREE.InstancedMesh).length, 13);
 });

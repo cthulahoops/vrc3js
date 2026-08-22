@@ -1,3 +1,6 @@
+interface PixelRatioRenderer { setPixelRatio(value: number): void }
+interface ShadowLight { shadow: { mapSize: { set(width: number, height: number): void } } }
+
 const INTERACTIVE_QUALITY = Object.freeze({
   maxPixelRatio: 1.5,
   minPixelRatio: 1,
@@ -12,15 +15,15 @@ const SCREENSHOT_QUALITY = Object.freeze({
   adaptive: false,
 });
 
-export function getRenderQuality({ screenshotMode = false } = {}) {
+export function getRenderQuality({ screenshotMode = false }: QualityOptions = {}) {
   return screenshotMode ? SCREENSHOT_QUALITY : INTERACTIVE_QUALITY;
 }
 
 /** Apply the expensive, resolution-dependent renderer settings in one place. */
-export function applyRenderQuality(renderer, sun, {
+export function applyRenderQuality(renderer: PixelRatioRenderer, sun: ShadowLight, {
   devicePixelRatio = globalThis.devicePixelRatio || 1,
   screenshotMode = false,
-} = {}) {
+}: ApplyQualityOptions = {}) {
   const quality = getRenderQuality({ screenshotMode });
   const pixelRatio = Math.min(devicePixelRatio, quality.maxPixelRatio);
   renderer.setPixelRatio(pixelRatio);
@@ -40,7 +43,7 @@ export function nextPixelRatio({
   slowFrameMs = 21,
   fastFrameMs = 15,
   step = .25,
-}) {
+}: PixelRatioOptions): number {
   if (averageFrameMs > slowFrameMs)
     return Math.max(minimumPixelRatio, pixelRatio - step);
   if (averageFrameMs < fastFrameMs)
@@ -53,14 +56,14 @@ export function nextPixelRatio({
  * delta. It samples sustained performance and ignores pauses/background-tab
  * spikes, rather than reacting to individual slow frames.
  */
-export function createAdaptivePixelRatio(renderer, {
+export function createAdaptivePixelRatio(renderer: PixelRatioRenderer, {
   devicePixelRatio = globalThis.devicePixelRatio || 1,
   maximumPixelRatio = Math.min(devicePixelRatio, INTERACTIVE_QUALITY.maxPixelRatio),
   minimumPixelRatio = INTERACTIVE_QUALITY.minPixelRatio,
   initialPixelRatio = Math.min(devicePixelRatio, maximumPixelRatio),
   sampleFrames = 120,
   settleFrames = 120,
-} = {}) {
+}: AdaptivePixelRatioOptions = {}) {
   let pixelRatio = initialPixelRatio;
   let elapsedMs = 0;
   let frames = 0;
@@ -70,7 +73,7 @@ export function createAdaptivePixelRatio(renderer, {
 
   return {
     get pixelRatio() { return pixelRatio; },
-    reportFrame(deltaSeconds) {
+    reportFrame(deltaSeconds: number): number {
       const frameMs = deltaSeconds * 1000;
       // Long gaps represent a suspended tab, debugger, or asset stall rather
       // than the steady-state GPU load this controller is intended to tune.
@@ -98,4 +101,23 @@ export function createAdaptivePixelRatio(renderer, {
       return pixelRatio;
     },
   };
+}
+interface QualityOptions { screenshotMode?: boolean }
+interface ApplyQualityOptions extends QualityOptions { devicePixelRatio?: number }
+interface PixelRatioOptions {
+  pixelRatio: number;
+  averageFrameMs: number;
+  maximumPixelRatio: number;
+  minimumPixelRatio?: number;
+  slowFrameMs?: number;
+  fastFrameMs?: number;
+  step?: number;
+}
+interface AdaptivePixelRatioOptions {
+  devicePixelRatio?: number;
+  maximumPixelRatio?: number;
+  minimumPixelRatio?: number;
+  initialPixelRatio?: number;
+  sampleFrames?: number;
+  settleFrames?: number;
 }

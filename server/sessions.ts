@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 export const sessionMaxAgeSeconds = 24 * 60 * 60;
 
 const sessionLifetimeMs = sessionMaxAgeSeconds * 1000;
-const sessions = new Map();
+const sessions = new Map<string, number>();
 
 function randomToken() {
   return randomBytes(32).toString("base64url");
@@ -22,7 +22,7 @@ export function createSession() {
   return id;
 }
 
-export function validSession(sessionId) {
+export function validSession(sessionId: string | null | undefined): string | undefined {
   if (!sessionId) return undefined;
 
   const expiresAt = sessions.get(sessionId);
