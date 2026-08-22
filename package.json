@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node scripts/dev.js",
     "dev:web": "vite --host 127.0.0.1",
-    "dev:bff": "node server/index.js",
+    "dev:bff": "bun server/index.js",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --test"

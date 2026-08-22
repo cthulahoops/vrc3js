@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import process from 'node:process';
 
 const commands = [
-  spawn(process.execPath, ['server/index.js'], { stdio: 'inherit', env: process.env }),
+  spawn('bun', ['server/index.js'], { stdio: 'inherit', env: process.env }),
   spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1'], { stdio: 'inherit', env: process.env }),
 ];
 
