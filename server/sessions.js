@@ -1,27 +1,9 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes } from "node:crypto";
 
-const appOrigin = process.env.APP_ORIGIN || "http://localhost:5173";
-const sessionLifetimeMs = 24 * 60 * 60 * 1000;
+export const sessionMaxAgeSeconds = 24 * 60 * 60;
+
+const sessionLifetimeMs = sessionMaxAgeSeconds * 1000;
 const sessions = new Map();
-const oauthRedirectUri = process.env.OAUTH_REDIRECT_URI;
-
-function readCookie(cookieHeader, name) {
-  for (const cookie of (cookieHeader || "").split(";")) {
-    const separator = cookie.indexOf("=");
-    if (separator === -1) continue;
-
-    const cookieName = cookie.slice(0, separator).trim();
-    if (cookieName !== name) continue;
-
-    try {
-      return decodeURIComponent(cookie.slice(separator + 1));
-    } catch {
-      return undefined;
-    }
-  }
-
-  return undefined;
-}
 
 function randomToken() {
   return randomBytes(32).toString("base64url");
@@ -40,23 +22,7 @@ export function createSession() {
   return id;
 }
 
-export function sessionCookie(sessionId) {
-  const secure = oauthRedirectUri?.startsWith("https:");
-
-  return [
-    `session=${encodeURIComponent(sessionId)}`,
-    "HttpOnly",
-    "SameSite=Lax",
-    "Path=/",
-    `Max-Age=${sessionLifetimeMs / 1000}`,
-    secure && "Secure",
-  ]
-    .filter(Boolean)
-    .join("; ");
-}
-
-export function validSessionId(cookieHeader) {
-  const sessionId = readCookie(cookieHeader, "session");
+export function validSession(sessionId) {
   if (!sessionId) return undefined;
 
   const expiresAt = sessions.get(sessionId);

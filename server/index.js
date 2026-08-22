@@ -1,6 +1,10 @@
 import { decodeActionCableMessage } from "./protocol.js";
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { createSession, sessionCookie, validSessionId } from "./sessions.js";
+import {
+  createSession,
+  sessionMaxAgeSeconds,
+  validSession,
+} from "./sessions.js";
 
 const oauthClientId = Bun.env.OAUTH_CLIENT_ID;
 const oauthRedirectUri = Bun.env.OAUTH_REDIRECT_URI;
@@ -12,43 +16,6 @@ const oauthTokenEndpoint = "https://www.recurse.com/oauth/token";
 
 function randomToken() {
   return randomBytes(32).toString("base64url");
-}
-
-function oauthStateCookie(state) {
-  const secure = oauthRedirectUri?.startsWith("https:");
-
-  return [
-    `oauth_state=${encodeURIComponent(state)}`,
-    "HttpOnly",
-    "SameSite=Lax",
-    "Path=/auth/callback",
-    "Max-Age=600",
-    secure && "Secure",
-  ]
-    .filter(Boolean)
-    .join("; ");
-}
-
-function clearOauthStateCookie() {
-  return oauthStateCookie("");
-}
-
-function readCookie(cookieHeader, name) {
-  for (const cookie of (cookieHeader || "").split(";")) {
-    const separator = cookie.indexOf("=");
-    if (separator === -1) continue;
-
-    const cookieName = cookie.slice(0, separator).trim();
-    if (cookieName !== name) continue;
-
-    try {
-      return decodeURIComponent(cookie.slice(separator + 1));
-    } catch {
-      return undefined;
-    }
-  }
-
-  return undefined;
 }
 
 function tokensMatch(left, right) {
@@ -92,34 +59,7 @@ async function exchangeAuthorizationCode(code) {
     throw new Error("Recurse token response did not include an access token");
   }
 
-  const decoded = decodeJwtLike(result.access_token);
-
-  console.log("Recurse token response", {
-    responseFields: Object.keys(result).sort(),
-    tokenType: result.token_type,
-    expiresIn: result.expires_in,
-    scope: result.scope,
-    accessTokenLength: result.access_token.length,
-    hasRefreshToken: typeof result.refresh_token === "string",
-    format: decoded ? "JWT-like" : "opaque",
-    decoded,
-  });
-
   return result;
-}
-
-function decodeJwtLike(token) {
-  const parts = token.split(".");
-  if (parts.length !== 3) return undefined;
-
-  try {
-    return {
-      header: JSON.parse(Buffer.from(parts[0], "base64url").toString("utf8")),
-      payload: JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")),
-    };
-  } catch {
-    return undefined;
-  }
 }
 
 const configuredMaxPayload = Number(
@@ -274,7 +214,7 @@ const server = Bun.serve({
 
   routes: {
     "/auth/login": {
-      GET() {
+      GET(request) {
         if (!oauthClientId || !oauthRedirectUri) {
           return new Response("OAuth is not configured", {
             status: 503,
@@ -291,11 +231,18 @@ const server = Bun.serve({
         //    authorizationUrl.searchParams.set("scope", "user:email");
         authorizationUrl.searchParams.set("state", state);
 
+        request.cookies.set("oauth_state", state, {
+          httpOnly: true,
+          sameSite: "lax",
+          path: "/auth/callback",
+          maxAge: 600,
+          secure: oauthRedirectUri.startsWith("https:"),
+        });
+
         return new Response(null, {
           status: 302,
           headers: {
             location: authorizationUrl.toString(),
-            "set-cookie": oauthStateCookie(state),
             "cache-control": "no-store",
           },
         });
@@ -307,17 +254,16 @@ const server = Bun.serve({
         const requestUrl = new URL(request.url);
         const code = requestUrl.searchParams.get("code");
         const returnedState = requestUrl.searchParams.get("state");
-        const cookieState = readCookie(
-          request.headers.get("cookie"),
-          "oauth_state",
-        );
+        const cookieState = request.cookies.get("oauth_state");
+
+        // The state cookie is single-use however the callback turns out.
+        request.cookies.delete("oauth_state", { path: "/auth/callback" });
 
         if (!code || !tokensMatch(returnedState, cookieState)) {
           return new Response("Invalid OAuth callback", {
             status: 400,
             headers: {
               "content-type": "text/plain",
-              "set-cookie": clearOauthStateCookie(),
               "cache-control": "no-store",
             },
           });
@@ -325,16 +271,22 @@ const server = Bun.serve({
 
         try {
           await exchangeAuthorizationCode(code);
-          const sessionId = createSession();
 
-          const headers = new Headers({
-            location: appOrigin,
-            "cache-control": "no-store",
+          request.cookies.set("session", createSession(), {
+            httpOnly: true,
+            sameSite: "lax",
+            path: "/",
+            maxAge: sessionMaxAgeSeconds,
+            secure: oauthRedirectUri?.startsWith("https:"),
           });
-          headers.append("set-cookie", clearOauthStateCookie());
-          headers.append("set-cookie", sessionCookie(sessionId));
 
-          return new Response(null, { status: 302, headers });
+          return new Response(null, {
+            status: 302,
+            headers: {
+              location: appOrigin,
+              "cache-control": "no-store",
+            },
+          });
         } catch (error) {
           console.error(`OAuth callback failed: ${error.message}`);
 
@@ -342,7 +294,6 @@ const server = Bun.serve({
             status: 502,
             headers: {
               "content-type": "text/plain",
-              "set-cookie": clearOauthStateCookie(),
               "cache-control": "no-store",
             },
           });
@@ -354,7 +305,7 @@ const server = Bun.serve({
       if (!isAllowedOrigin(request.headers.get("origin"))) {
         return new Response("Forbidden", { status: 403 });
       }
-      if (!validSessionId(request.headers.get("cookie"))) {
+      if (!validSession(request.cookies.get("session"))) {
         return new Response("Unauthorized", { status: 401 });
       }
       if (server.upgrade(request)) return undefined;
