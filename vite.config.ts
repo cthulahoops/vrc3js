@@ -4,10 +4,11 @@ export default defineConfig({
   server: {
     host: "localhost",
     proxy: {
-      "/api/world": {
-        target: "ws://localhost:8787",
+      "/api": {
+        target: "http://localhost:8787",
         ws: true,
       },
+      "/auth": "http://localhost:8787",
     },
   },
 });

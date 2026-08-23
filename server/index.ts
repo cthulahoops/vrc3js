@@ -224,6 +224,15 @@ const server = Bun.serve({
   port: Number(Bun.env.BFF_PORT ?? 8787),
 
   routes: {
+    "/api/session": {
+      GET(request) {
+        return Response.json(
+          { authenticated: Boolean(validSession(request.cookies.get("session"))) },
+          { headers: { "cache-control": "no-store" } },
+        );
+      },
+    },
+
     "/auth/login": {
       GET(request) {
         if (!oauthClientId || !oauthRedirectUri) {
