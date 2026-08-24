@@ -1,5 +1,9 @@
-interface PixelRatioRenderer { setPixelRatio(value: number): void }
-interface ShadowLight { shadow: { mapSize: { set(width: number, height: number): void } } }
+interface PixelRatioRenderer {
+  setPixelRatio(value: number): void;
+}
+interface ShadowLight {
+  shadow: { mapSize: { set(width: number, height: number): void } };
+}
 
 const INTERACTIVE_QUALITY = Object.freeze({
   maxPixelRatio: 1.5,
@@ -15,15 +19,21 @@ const SCREENSHOT_QUALITY = Object.freeze({
   adaptive: false,
 });
 
-export function getRenderQuality({ screenshotMode = false }: QualityOptions = {}) {
+export function getRenderQuality({
+  screenshotMode = false,
+}: QualityOptions = {}) {
   return screenshotMode ? SCREENSHOT_QUALITY : INTERACTIVE_QUALITY;
 }
 
 /** Apply the expensive, resolution-dependent renderer settings in one place. */
-export function applyRenderQuality(renderer: PixelRatioRenderer, sun: ShadowLight, {
-  devicePixelRatio = globalThis.devicePixelRatio || 1,
-  screenshotMode = false,
-}: ApplyQualityOptions = {}) {
+export function applyRenderQuality(
+  renderer: PixelRatioRenderer,
+  sun: ShadowLight,
+  {
+    devicePixelRatio = globalThis.devicePixelRatio || 1,
+    screenshotMode = false,
+  }: ApplyQualityOptions = {},
+) {
   const quality = getRenderQuality({ screenshotMode });
   const pixelRatio = Math.min(devicePixelRatio, quality.maxPixelRatio);
   renderer.setPixelRatio(pixelRatio);
@@ -42,7 +52,7 @@ export function nextPixelRatio({
   minimumPixelRatio = 1,
   slowFrameMs = 21,
   fastFrameMs = 15,
-  step = .25,
+  step = 0.25,
 }: PixelRatioOptions): number {
   if (averageFrameMs > slowFrameMs)
     return Math.max(minimumPixelRatio, pixelRatio - step);
@@ -56,23 +66,34 @@ export function nextPixelRatio({
  * delta. It samples sustained performance and ignores pauses/background-tab
  * spikes, rather than reacting to individual slow frames.
  */
-export function createAdaptivePixelRatio(renderer: PixelRatioRenderer, {
-  devicePixelRatio = globalThis.devicePixelRatio || 1,
-  maximumPixelRatio = Math.min(devicePixelRatio, INTERACTIVE_QUALITY.maxPixelRatio),
-  minimumPixelRatio = INTERACTIVE_QUALITY.minPixelRatio,
-  initialPixelRatio = Math.min(devicePixelRatio, maximumPixelRatio),
-  sampleFrames = 120,
-  settleFrames = 120,
-}: AdaptivePixelRatioOptions = {}) {
+export function createAdaptivePixelRatio(
+  renderer: PixelRatioRenderer,
+  {
+    devicePixelRatio = globalThis.devicePixelRatio || 1,
+    maximumPixelRatio = Math.min(
+      devicePixelRatio,
+      INTERACTIVE_QUALITY.maxPixelRatio,
+    ),
+    minimumPixelRatio = INTERACTIVE_QUALITY.minPixelRatio,
+    initialPixelRatio = Math.min(devicePixelRatio, maximumPixelRatio),
+    sampleFrames = 120,
+    settleFrames = 120,
+  }: AdaptivePixelRatioOptions = {},
+) {
   let pixelRatio = initialPixelRatio;
   let elapsedMs = 0;
   let frames = 0;
   let settling = 0;
 
-  function resetSample() { elapsedMs = 0; frames = 0; }
+  function resetSample() {
+    elapsedMs = 0;
+    frames = 0;
+  }
 
   return {
-    get pixelRatio() { return pixelRatio; },
+    get pixelRatio() {
+      return pixelRatio;
+    },
     reportFrame(deltaSeconds: number): number {
       const frameMs = deltaSeconds * 1000;
       // Long gaps represent a suspended tab, debugger, or asset stall rather
@@ -81,7 +102,10 @@ export function createAdaptivePixelRatio(renderer: PixelRatioRenderer, {
         resetSample();
         return pixelRatio;
       }
-      if (settling) { settling--; return pixelRatio; }
+      if (settling) {
+        settling--;
+        return pixelRatio;
+      }
       elapsedMs += frameMs;
       frames++;
       if (frames < sampleFrames) return pixelRatio;
@@ -102,8 +126,12 @@ export function createAdaptivePixelRatio(renderer: PixelRatioRenderer, {
     },
   };
 }
-interface QualityOptions { screenshotMode?: boolean }
-interface ApplyQualityOptions extends QualityOptions { devicePixelRatio?: number }
+interface QualityOptions {
+  screenshotMode?: boolean;
+}
+interface ApplyQualityOptions extends QualityOptions {
+  devicePixelRatio?: number;
+}
 interface PixelRatioOptions {
   pixelRatio: number;
   averageFrameMs: number;

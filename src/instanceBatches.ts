@@ -1,7 +1,8 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
 function positiveInteger(value: number, name: string): number {
-  if (!Number.isInteger(value) || value < 1) throw new RangeError(`${name} must be a positive integer`);
+  if (!Number.isInteger(value) || value < 1)
+    throw new RangeError(`${name} must be a positive integer`);
   return value;
 }
 
@@ -29,16 +30,24 @@ export class InstanceBatch {
   readonly keys: unknown[] = [];
   mesh: THREE.InstancedMesh;
 
-  constructor(scene: THREE.Scene, geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[], options: InstanceBatchOptions = {}) {
+  constructor(
+    scene: THREE.Scene,
+    geometry: THREE.BufferGeometry,
+    material: THREE.Material | THREE.Material[],
+    options: InstanceBatchOptions = {},
+  ) {
     this.scene = scene;
     this.geometry = geometry;
     this.material = material;
-    this.capacity = positiveInteger(options.initialCapacity ?? 16, 'initialCapacity');
+    this.capacity = positiveInteger(
+      options.initialCapacity ?? 16,
+      "initialCapacity",
+    );
     this.castShadow = options.castShadow ?? true;
     this.receiveShadow = options.receiveShadow ?? true;
     this.frustumCulled = options.frustumCulled ?? false;
     this.useInstanceColor = options.useInstanceColor ?? false;
-    this.name = options.name ?? '';
+    this.name = options.name ?? "";
     this.mesh = this.createMesh(this.capacity);
     this.scene.add(this.mesh);
   }
@@ -52,7 +61,11 @@ export class InstanceBatch {
   }
 
   createMesh(capacity: number): THREE.InstancedMesh {
-    const mesh = new THREE.InstancedMesh(this.geometry, this.material, capacity);
+    const mesh = new THREE.InstancedMesh(
+      this.geometry,
+      this.material,
+      capacity,
+    );
     mesh.count = this.size;
     mesh.castShadow = this.castShadow;
     mesh.receiveShadow = this.receiveShadow;
@@ -82,7 +95,11 @@ export class InstanceBatch {
     this.scene.add(this.mesh);
   }
 
-  set(key: unknown, matrix: THREE.Matrix4, color: THREE.Color | null = null): number {
+  set(
+    key: unknown,
+    matrix: THREE.Matrix4,
+    color: THREE.Color | null = null,
+  ): number {
     let index = this.indices.get(key);
     if (index == null) {
       if (this.size === this.capacity) this.grow();
@@ -94,7 +111,8 @@ export class InstanceBatch {
     this.mesh.setMatrixAt(index, matrix);
     this.mesh.instanceMatrix.needsUpdate = true;
     if (this.useInstanceColor) {
-      if (color == null) throw new TypeError('color is required for a color instance batch');
+      if (color == null)
+        throw new TypeError("color is required for a color instance batch");
       this.mesh.setColorAt(index, color);
       this.mesh.instanceColor!.needsUpdate = true;
     }
@@ -148,7 +166,10 @@ export interface InstanceBatchOptions {
   name?: string;
 }
 
-export interface InstanceDefinition extends Omit<InstanceBatchOptions, "useInstanceColor" | "initialCapacity"> {
+export interface InstanceDefinition extends Omit<
+  InstanceBatchOptions,
+  "useInstanceColor" | "initialCapacity"
+> {
   bucketKey: unknown;
   geometry: THREE.BufferGeometry;
   material: THREE.Material | THREE.Material[];
@@ -168,12 +189,20 @@ export class InstanceBatchRegistry {
   readonly batches = new Map<unknown, InstanceBatch>();
   readonly locations = new Map<unknown, unknown>();
 
-  constructor(scene: THREE.Scene, options: Pick<InstanceBatchOptions, "initialCapacity"> = {}) {
+  constructor(
+    scene: THREE.Scene,
+    options: Pick<InstanceBatchOptions, "initialCapacity"> = {},
+  ) {
     this.scene = scene;
     this.initialCapacity = options.initialCapacity ?? 16;
   }
 
-  ensureBatch(bucketKey: unknown, geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[], options: InstanceDefinition): InstanceBatch {
+  ensureBatch(
+    bucketKey: unknown,
+    geometry: THREE.BufferGeometry,
+    material: THREE.Material | THREE.Material[],
+    options: InstanceDefinition,
+  ): InstanceBatch {
     let batch = this.batches.get(bucketKey);
     if (!batch) {
       batch = new InstanceBatch(this.scene, geometry, material, {
@@ -184,16 +213,20 @@ export class InstanceBatchRegistry {
       });
       this.batches.set(bucketKey, batch);
     } else if (batch.geometry !== geometry || batch.material !== material) {
-      throw new Error(`Instance batch ${String(bucketKey)} was reused with different draw resources`);
+      throw new Error(
+        `Instance batch ${String(bucketKey)} was reused with different draw resources`,
+      );
     } else if (batch.useInstanceColor !== (options?.color != null)) {
-      throw new Error(`Instance batch ${String(bucketKey)} mixed colored and uncolored instances`);
+      throw new Error(
+        `Instance batch ${String(bucketKey)} mixed colored and uncolored instances`,
+      );
     }
     return batch;
   }
 
   set(componentKey: unknown, definition: InstanceDefinition): InstanceBatch {
     const { bucketKey, geometry, material, matrix } = definition;
-    if (bucketKey == null) throw new TypeError('bucketKey is required');
+    if (bucketKey == null) throw new TypeError("bucketKey is required");
     const previousBucketKey = this.locations.get(componentKey);
     if (previousBucketKey != null && previousBucketKey !== bucketKey) {
       const previousBatch = this.batches.get(previousBucketKey);
@@ -223,7 +256,7 @@ export class InstanceBatchRegistry {
   }
 
   dispose() {
-    this.batches.forEach(batch => batch.dispose());
+    this.batches.forEach((batch) => batch.dispose());
     this.batches.clear();
     this.locations.clear();
   }

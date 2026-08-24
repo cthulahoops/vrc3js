@@ -1,10 +1,20 @@
-import * as THREE from 'three';
-import { ORIGINAL_TEXTURES } from './originalTextures.js';
-import { InstanceBatchRegistry } from './instanceBatches.js';
-import type { AvatarEntity, EntityColor, EntityId, EntityUpdate, EntityType, WorldEntity } from '../server/protocol.js';
+import * as THREE from "three";
+import { ORIGINAL_TEXTURES } from "./originalTextures.js";
+import { InstanceBatchRegistry } from "./instanceBatches.js";
+import type {
+  AvatarEntity,
+  EntityColor,
+  EntityId,
+  EntityUpdate,
+  EntityType,
+  WorldEntity,
+} from "../server/protocol.js";
 
 type ImageAsset = CanvasImageSource;
-interface EmojiSprite { x: number; y: number }
+interface EmojiSprite {
+  x: number;
+  y: number;
+}
 interface EmojiEntry {
   sheet_x?: number;
   sheet_y?: number;
@@ -19,7 +29,9 @@ interface RenderComponent {
   material: THREE.MeshStandardMaterial;
   color: THREE.Color | null;
 }
-export interface RetainedComponent extends RenderComponent { key: object }
+export interface RetainedComponent extends RenderComponent {
+  key: object;
+}
 export type EntityHandle = THREE.Object3D & {
   userData: {
     entity?: WorldEntity;
@@ -27,55 +39,86 @@ export type EntityHandle = THREE.Object3D & {
   };
 };
 
-const EMOJI_DATA_URL = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@14.0.0/emoji.json';
-const EMOJI_SHEET_URL = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@14.0.0/img/apple/sheets-256/64.png';
+const EMOJI_DATA_URL =
+  "https://cdn.jsdelivr.net/npm/emoji-datasource-apple@14.0.0/emoji.json";
+const EMOJI_SHEET_URL =
+  "https://cdn.jsdelivr.net/npm/emoji-datasource-apple@14.0.0/img/apple/sheets-256/64.png";
 const EMOJI_SIZE = 64;
 const EMOJI_CELL_SIZE = EMOJI_SIZE + 2;
 
 export const COLORS: Record<EntityColor, string> = {
-  gray: '#919c9c', pink: '#d95a88', orange: '#e6a56e', green: '#3dc06c',
-  blue: '#66bdff', purple: '#956bc3', yellow: '#e7dd6f',
+  gray: "#919c9c",
+  pink: "#d95a88",
+  orange: "#e6a56e",
+  green: "#3dc06c",
+  blue: "#66bdff",
+  purple: "#956bc3",
+  yellow: "#e7dd6f",
 };
 
-type IconType = Exclude<EntityType, 'Wall' | 'Desk' | 'Avatar' | 'Bot'>;
+type IconType = Exclude<EntityType, "Wall" | "Desk" | "Avatar" | "Bot">;
 const ICONS: Record<IconType, readonly [string, string]> = {
-  ZoomLink: ['↗', '#2472d9'], Link: ['↗', '#eeeeee'], Note: ['✎', COLORS.yellow],
-  AudioBlock: ['♪', '#eeeeee'], 'RC::Calendar': ['31', '#eeeeee'], AudioRoom: ['●', '#eeeeee'],
+  ZoomLink: ["↗", "#2472d9"],
+  Link: ["↗", "#eeeeee"],
+  Note: ["✎", COLORS.yellow],
+  AudioBlock: ["♪", "#eeeeee"],
+  "RC::Calendar": ["31", "#eeeeee"],
+  AudioRoom: ["●", "#eeeeee"],
 };
 
 let loadedAssets: Record<string, ImageAsset> = {};
 let emojiSprites = new Map<string, EmojiSprite>();
 
-function loadImage(source: string, crossOrigin = false): Promise<HTMLImageElement> {
+function loadImage(
+  source: string,
+  crossOrigin = false,
+): Promise<HTMLImageElement> {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
-    if (crossOrigin) image.crossOrigin = 'anonymous';
-    image.onload = () => resolve(image); image.onerror = reject; image.src = source;
+    if (crossOrigin) image.crossOrigin = "anonymous";
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = source;
   });
 }
 
-function addEmojiSprite(sprites: Map<string, EmojiSprite>, entry: EmojiEntry): void {
-  if (entry.sheet_x == null || entry.sheet_y == null || !entry.has_img_apple) return;
-  const sprite = { x: entry.sheet_x * EMOJI_CELL_SIZE + 1, y: entry.sheet_y * EMOJI_CELL_SIZE + 1 };
+function addEmojiSprite(
+  sprites: Map<string, EmojiSprite>,
+  entry: EmojiEntry,
+): void {
+  if (entry.sheet_x == null || entry.sheet_y == null || !entry.has_img_apple)
+    return;
+  const sprite = {
+    x: entry.sheet_x * EMOJI_CELL_SIZE + 1,
+    y: entry.sheet_y * EMOJI_CELL_SIZE + 1,
+  };
   sprites.set(entry.unified, sprite);
   if (entry.non_qualified) sprites.set(entry.non_qualified, sprite);
 }
 
 function indexEmojiSprites(data: EmojiEntry[]): Map<string, EmojiSprite> {
   const sprites = new Map<string, EmojiSprite>();
-  data.forEach(entry => {
+  data.forEach((entry) => {
     addEmojiSprite(sprites, entry);
-    Object.values(entry.skin_variations || {}).forEach(variation => addEmojiSprite(sprites, variation));
+    Object.values(entry.skin_variations || {}).forEach((variation) =>
+      addEmojiSprite(sprites, variation),
+    );
   });
   return sprites;
 }
 
 export async function loadWorldAssets() {
   const [assets, emojiData, emojiSheet] = await Promise.all([
-    Promise.all(Object.entries(ORIGINAL_TEXTURES).map(async ([name, source]) => [name, await loadImage(source)])),
-    fetch(EMOJI_DATA_URL).then(async response => {
-      if (!response.ok) throw new Error(`Could not load emoji data (${response.status})`);
-      return await response.json() as EmojiEntry[];
+    Promise.all(
+      Object.entries(ORIGINAL_TEXTURES).map(async ([name, source]) => [
+        name,
+        await loadImage(source),
+      ]),
+    ),
+    fetch(EMOJI_DATA_URL).then(async (response) => {
+      if (!response.ok)
+        throw new Error(`Could not load emoji data (${response.status})`);
+      return (await response.json()) as EmojiEntry[];
     }),
     loadImage(EMOJI_SHEET_URL, true),
   ]);
@@ -83,12 +126,17 @@ export async function loadWorldAssets() {
   emojiSprites = indexEmojiSprites(emojiData);
 }
 
-function canvasTexture(draw: (context: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void, repeat: THREE.Vector2 | null = null): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas'); canvas.width = canvas.height = 256;
-  const context = canvas.getContext('2d');
-  if (!context) throw new Error('Canvas 2D rendering is unavailable');
+function canvasTexture(
+  draw: (context: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void,
+  repeat: THREE.Vector2 | null = null,
+): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 256;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Canvas 2D rendering is unavailable");
   draw(context, canvas);
-  const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 8;
   if (repeat) {
     texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
@@ -98,66 +146,145 @@ function canvasTexture(draw: (context: CanvasRenderingContext2D, canvas: HTMLCan
 }
 
 function gridTexture() {
-  const texture = canvasTexture((context, canvas) => {
-    context.fillStyle = '#eeeeee'; context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(loadedAssets.grid!, 0, 0, canvas.width, canvas.height);
-  }, new THREE.Vector2(1000, 1000));
+  const texture = canvasTexture(
+    (context, canvas) => {
+      context.fillStyle = "#eeeeee";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(loadedAssets.grid!, 0, 0, canvas.width, canvas.height);
+    },
+    new THREE.Vector2(1000, 1000),
+  );
   return texture;
 }
 
-function faceTexture(symbol: string, background: string, foreground = '#16201e', emoji = false): THREE.CanvasTexture {
+function faceTexture(
+  symbol: string,
+  background: string,
+  foreground = "#16201e",
+  emoji = false,
+): THREE.CanvasTexture {
   return canvasTexture((context, canvas) => {
-    context.fillStyle = background; context.fillRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = foreground; context.textAlign = 'center'; context.textBaseline = 'middle';
-    context.font = emoji ? '136px "Noto Color Emoji", sans-serif' : '600 136px sans-serif';
+    context.fillStyle = background;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = foreground;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.font = emoji
+      ? '136px "Noto Color Emoji", sans-serif'
+      : "600 136px sans-serif";
     context.fillText(symbol, 128, 133, 220);
   });
 }
 
-function glyphTexture(symbol: string, background: string, foreground = '#16201e'): THREE.CanvasTexture {
-  const unified = [...symbol].map(character => character.codePointAt(0)!.toString(16).toUpperCase()).join('-');
+function glyphTexture(
+  symbol: string,
+  background: string,
+  foreground = "#16201e",
+): THREE.CanvasTexture {
+  const unified = [...symbol]
+    .map((character) => character.codePointAt(0)!.toString(16).toUpperCase())
+    .join("-");
   const sprite = emojiSprites.get(unified);
-  if (sprite) return canvasTexture((context, canvas) => {
-    context.fillStyle = background; context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(loadedAssets.emojiSheet!, sprite.x, sprite.y, EMOJI_SIZE, EMOJI_SIZE, 28, 28, 200, 200);
+  if (sprite)
+    return canvasTexture((context, canvas) => {
+      context.fillStyle = background;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(
+        loadedAssets.emojiSheet!,
+        sprite.x,
+        sprite.y,
+        EMOJI_SIZE,
+        EMOJI_SIZE,
+        28,
+        28,
+        200,
+        200,
+      );
+    });
+  return faceTexture(
+    symbol,
+    background,
+    foreground,
+    /[^\u0000-\u00ff]/.test(symbol),
+  );
+}
+
+function material(
+  color: THREE.ColorRepresentation,
+  texture: THREE.Texture | null = null,
+): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    color: texture ? "#ffffff" : color,
+    map: texture,
+    roughness: 0.76,
+    metalness: 0.02,
   });
-  return faceTexture(symbol, background, foreground, /[^\u0000-\u00ff]/.test(symbol));
 }
 
-function material(color: THREE.ColorRepresentation, texture: THREE.Texture | null = null): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ color: texture ? '#ffffff' : color, map: texture, roughness: .76, metalness: .02 });
-}
-
-function iconTexture(type: IconType, background?: string | null): THREE.CanvasTexture {
+function iconTexture(
+  type: IconType,
+  background?: string | null,
+): THREE.CanvasTexture {
   const [symbol, defaultBackground] = ICONS[type];
-  const assetName: Record<IconType, string> = { ZoomLink: 'zoom', Link: 'link', Note: 'note', AudioBlock: 'audio_block', 'RC::Calendar': 'calendar', AudioRoom: 'microphone' };
+  const assetName: Record<IconType, string> = {
+    ZoomLink: "zoom",
+    Link: "link",
+    Note: "note",
+    AudioBlock: "audio_block",
+    "RC::Calendar": "calendar",
+    AudioRoom: "microphone",
+  };
   const asset = loadedAssets[assetName[type]];
   if (!asset) return faceTexture(symbol, background || defaultBackground);
   return canvasTexture((context, canvas) => {
-    context.fillStyle = background || defaultBackground; context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = background || defaultBackground;
+    context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(asset, 0, 0, canvas.width, canvas.height);
   });
 }
 
-function avatarTexture(entity: AvatarEntity, image?: ImageAsset): THREE.CanvasTexture {
-  if (image) return canvasTexture((context, canvas) => {
-    context.fillStyle = '#cccccc'; context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  });
-  const initials = entity.initials || entity.name?.split(/\s+/).map(part => part[0]).join('').slice(0, 2) || '?';
-  return faceTexture(initials, entity.photo_color || '#c8ceca');
+function avatarTexture(
+  entity: AvatarEntity,
+  image?: ImageAsset,
+): THREE.CanvasTexture {
+  if (image)
+    return canvasTexture((context, canvas) => {
+      context.fillStyle = "#cccccc";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    });
+  const initials =
+    entity.initials ||
+    entity.name
+      ?.split(/\s+/)
+      .map((part) => part[0])
+      .join("")
+      .slice(0, 2) ||
+    "?";
+  return faceTexture(initials, entity.photo_color || "#c8ceca");
 }
 
-function valuesEqual(left: unknown, right: unknown, ignoredKey: string | null = null): boolean {
+function valuesEqual(
+  left: unknown,
+  right: unknown,
+  ignoredKey: string | null = null,
+): boolean {
   if (Object.is(left, right)) return true;
-  if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
+  if (!left || !right || typeof left !== "object" || typeof right !== "object")
+    return false;
   if (Array.isArray(left) !== Array.isArray(right)) return false;
-  const leftKeys = Object.keys(left).filter(key => key !== ignoredKey);
-  const rightKeys = Object.keys(right).filter(key => key !== ignoredKey);
-  if (leftKeys.length !== rightKeys.length || leftKeys.some(key => !Object.hasOwn(right, key))) return false;
+  const leftKeys = Object.keys(left).filter((key) => key !== ignoredKey);
+  const rightKeys = Object.keys(right).filter((key) => key !== ignoredKey);
+  if (
+    leftKeys.length !== rightKeys.length ||
+    leftKeys.some((key) => !Object.hasOwn(right, key))
+  )
+    return false;
   const leftRecord = left as Record<string, unknown>;
   const rightRecord = right as Record<string, unknown>;
-  return leftKeys.every(key => valuesEqual(leftRecord[key], rightRecord[key]));
+  return leftKeys.every((key) =>
+    valuesEqual(leftRecord[key], rightRecord[key]),
+  );
 }
 
 export class VirtualRcRenderer {
@@ -183,14 +310,16 @@ export class VirtualRcRenderer {
     // objects; shared GPU resources are released together by dispose().
     this.instanceBatches = new InstanceBatchRegistry(scene);
     this.instanceGeometry = this.geometry(new THREE.Vector3(1, 1, 1));
-    this.instanceColorMaterial = this.cachedMaterial('#ffffff');
+    this.instanceColorMaterial = this.cachedMaterial("#ffffff");
     const floor = new THREE.Mesh(
       this.geometry(new THREE.Vector3(1000, 1, 1000)),
-      this.cachedMaterial('#eeeeee', this.texture('grid', gridTexture)),
+      this.cachedMaterial("#eeeeee", this.texture("grid", gridTexture)),
     );
     // Entity coordinates identify cell centers, so the floor boundaries sit at
     // half-integers: the cell centered at (0, 0) spans -0.5 through 0.5.
-    floor.position.set(499.5, -0.5, 499.5); floor.receiveShadow = true; this.scene.add(floor);
+    floor.position.set(499.5, -0.5, 499.5);
+    floor.receiveShadow = true;
+    this.scene.add(floor);
     this.floor = floor;
   }
 
@@ -201,23 +330,38 @@ export class VirtualRcRenderer {
 
   geometry(size: THREE.Vector3): THREE.BoxGeometry {
     const key = `${size.x}:${size.y}:${size.z}`;
-    if (!this.geometries.has(key)) this.geometries.set(key, new THREE.BoxGeometry(size.x, size.y, size.z));
+    if (!this.geometries.has(key))
+      this.geometries.set(key, new THREE.BoxGeometry(size.x, size.y, size.z));
     return this.geometries.get(key)!;
   }
 
-  cachedMaterial(color: THREE.ColorRepresentation, texture: THREE.Texture | null = null): THREE.MeshStandardMaterial {
-    const key = `${texture ? '#ffffff' : color}:${texture?.uuid || ''}`;
-    if (!this.materials.has(key)) this.materials.set(key, material(color, texture));
+  cachedMaterial(
+    color: THREE.ColorRepresentation,
+    texture: THREE.Texture | null = null,
+  ): THREE.MeshStandardMaterial {
+    const key = `${texture ? "#ffffff" : color}:${texture?.uuid || ""}`;
+    if (!this.materials.has(key))
+      this.materials.set(key, material(color, texture));
     return this.materials.get(key)!;
   }
 
-  cachedGlyphTexture(symbol: string, background: string, foreground = '#16201e'): THREE.Texture {
-    return this.texture(`glyph:${JSON.stringify([symbol, background, foreground])}`,
-      () => glyphTexture(symbol, background, foreground));
+  cachedGlyphTexture(
+    symbol: string,
+    background: string,
+    foreground = "#16201e",
+  ): THREE.Texture {
+    return this.texture(
+      `glyph:${JSON.stringify([symbol, background, foreground])}`,
+      () => glyphTexture(symbol, background, foreground),
+    );
   }
 
-  cachedIconTexture(type: IconType, background?: string | null, repeat: { x: number; y: number } | null = null): THREE.Texture {
-    const key = `icon:${JSON.stringify([type, background || '', repeat?.x || 0, repeat?.y || 0])}`;
+  cachedIconTexture(
+    type: IconType,
+    background?: string | null,
+    repeat: { x: number; y: number } | null = null,
+  ): THREE.Texture {
+    const key = `icon:${JSON.stringify([type, background || "", repeat?.x || 0, repeat?.y || 0])}`;
     return this.texture(key, () => {
       const texture = iconTexture(type, background);
       if (repeat) {
@@ -230,32 +374,61 @@ export class VirtualRcRenderer {
 
   cachedAvatarTexture(entity: AvatarEntity): THREE.Texture {
     const imageVersion = this.avatarImageVersions.get(entity.id) || 0;
-    const initials = entity.initials || entity.name?.split(/\s+/).map(part => part[0]).join('').slice(0, 2) || '?';
+    const initials =
+      entity.initials ||
+      entity.name
+        ?.split(/\s+/)
+        .map((part) => part[0])
+        .join("")
+        .slice(0, 2) ||
+      "?";
     const image = this.avatarImages.get(entity.id);
-    const visual = image ? [entity.id, imageVersion] : [initials, entity.photo_color || '#c8ceca'];
+    const visual = image
+      ? [entity.id, imageVersion]
+      : [initials, entity.photo_color || "#c8ceca"];
     const key = `avatar:${JSON.stringify(visual)}`;
-    return this.texture(key, () => avatarTexture(entity, this.avatarImages.get(entity.id)));
+    return this.texture(key, () =>
+      avatarTexture(entity, this.avatarImages.get(entity.id)),
+    );
   }
 
-  cube(size: THREE.Vector3, color: THREE.ColorRepresentation, texture: THREE.Texture | null = null, offset = new THREE.Vector3()): RenderComponent {
+  cube(
+    size: THREE.Vector3,
+    color: THREE.ColorRepresentation,
+    texture: THREE.Texture | null = null,
+    offset = new THREE.Vector3(),
+  ): RenderComponent {
     return {
       size,
       offset,
-      material: texture ? this.cachedMaterial(color, texture) : this.instanceColorMaterial,
+      material: texture
+        ? this.cachedMaterial(color, texture)
+        : this.instanceColorMaterial,
       color: texture ? null : new THREE.Color(color),
     };
   }
 
-  componentMatrix(handle: EntityHandle, component: RetainedComponent, target = new THREE.Matrix4()): THREE.Matrix4 {
+  componentMatrix(
+    handle: EntityHandle,
+    component: RetainedComponent,
+    target = new THREE.Matrix4(),
+  ): THREE.Matrix4 {
     const position = VirtualRcRenderer.scratchPosition.set(
       handle.position.x + component.offset.x,
       component.offset.y + component.size.y / 2,
       handle.position.z + component.offset.z,
     );
-    return target.compose(position, VirtualRcRenderer.identityQuaternion, component.size);
+    return target.compose(
+      position,
+      VirtualRcRenderer.identityQuaternion,
+      component.size,
+    );
   }
 
-  setEntityComponents(handle: EntityHandle, components: RenderComponent[]): void {
+  setEntityComponents(
+    handle: EntityHandle,
+    components: RenderComponent[],
+  ): void {
     const previous = handle.userData.components || [];
     handle.userData.components = components.map((component, index) => ({
       ...component,
@@ -274,7 +447,11 @@ export class VirtualRcRenderer {
         bucketKey,
         geometry: this.instanceGeometry,
         material: component.material,
-        matrix: this.componentMatrix(handle, component, VirtualRcRenderer.scratchMatrix),
+        matrix: this.componentMatrix(
+          handle,
+          component,
+          VirtualRcRenderer.scratchMatrix,
+        ),
         castShadow: true,
         receiveShadow: true,
         color: component.color,
@@ -282,15 +459,24 @@ export class VirtualRcRenderer {
     }
   }
 
-  async setAvatarImage(id: EntityId, source: string | ImageAsset): Promise<void> {
-    const image = typeof source === 'string' ? await new Promise<HTMLImageElement>((resolve, reject) => {
-      const loaded = new Image(); loaded.onload = () => resolve(loaded); loaded.onerror = reject; loaded.src = source;
-    }) : source;
+  async setAvatarImage(
+    id: EntityId,
+    source: string | ImageAsset,
+  ): Promise<void> {
+    const image =
+      typeof source === "string"
+        ? await new Promise<HTMLImageElement>((resolve, reject) => {
+            const loaded = new Image();
+            loaded.onload = () => resolve(loaded);
+            loaded.onerror = reject;
+            loaded.src = source;
+          })
+        : source;
     const previousVersion = this.avatarImageVersions.get(id) || 0;
     this.avatarImages.set(id, image);
     this.avatarImageVersions.set(id, previousVersion + 1);
     const current = this.entities.get(id)?.userData.entity;
-    if (current?.type === 'Avatar') this.handleEntity(current, true);
+    if (current?.type === "Avatar") this.handleEntity(current, true);
     // Uploaded avatar textures are unique to an id/version, so once the scene
     // object has been rebuilt no other entity can still reference this pair.
     if (previousVersion) this.disposeAvatarImageVersion(id, previousVersion);
@@ -309,11 +495,16 @@ export class VirtualRcRenderer {
   }
 
   handleEntity(entity: EntityUpdate, forceRebuild = false): void {
-    if ('deleted' in entity) return this.deleteEntity(entity.id);
+    if ("deleted" in entity) return this.deleteEntity(entity.id);
     const currentObject = this.entities.get(entity.id);
     const currentEntity = currentObject?.userData.entity;
-    if (!forceRebuild && currentEntity && valuesEqual(currentEntity, entity)) return;
-    if (!forceRebuild && currentEntity && valuesEqual(currentEntity, entity, 'pos')) {
+    if (!forceRebuild && currentEntity && valuesEqual(currentEntity, entity))
+      return;
+    if (
+      !forceRebuild &&
+      currentEntity &&
+      valuesEqual(currentEntity, entity, "pos")
+    ) {
       currentObject.position.set(entity.pos.x, 0, entity.pos.y);
       currentObject.userData.entity = structuredClone(entity);
       this.updateEntityMatrices(currentObject);
@@ -334,86 +525,196 @@ export class VirtualRcRenderer {
   }
 
   deleteEntity(id: EntityId): void {
-    const object = this.entities.get(id); if (!object) return;
-    for (const component of object.userData.components || []) this.instanceBatches.delete(component.key);
+    const object = this.entities.get(id);
+    if (!object) return;
+    for (const component of object.userData.components || [])
+      this.instanceBatches.delete(component.key);
     this.entities.delete(id);
   }
 
   replaceEntities(entities: EntityUpdate[]): void {
     const incomingIds = new Set<EntityId>();
-    entities.forEach(entity => {
+    entities.forEach((entity) => {
       this.handleEntity(entity);
       if (this.entities.has(entity.id)) incomingIds.add(entity.id);
     });
-    for (const id of this.entities.keys()) if (!incomingIds.has(id)) this.deleteEntity(id);
+    for (const id of this.entities.keys())
+      if (!incomingIds.has(id)) this.deleteEntity(id);
   }
 
   dispose() {
     for (const id of [...this.entities.keys()]) this.deleteEntity(id);
     this.scene.remove(this.floor);
     this.instanceBatches.dispose();
-    this.geometries.forEach(geometry => geometry.dispose());
-    this.materials.forEach(cached => cached.dispose());
-    this.textures.forEach(texture => texture.dispose());
-    this.geometries.clear(); this.materials.clear(); this.textures.clear();
-    this.avatarImages.clear(); this.avatarImageVersions.clear();
+    this.geometries.forEach((geometry) => geometry.dispose());
+    this.materials.forEach((cached) => cached.dispose());
+    this.textures.forEach((texture) => texture.dispose());
+    this.geometries.clear();
+    this.materials.clear();
+    this.textures.clear();
+    this.avatarImages.clear();
+    this.avatarImageVersions.clear();
   }
 
   createEntity(entity: WorldEntity): RenderComponent[] | null {
     const components: RenderComponent[] = [];
-    if (entity.type === 'Wall') {
+    if (entity.type === "Wall") {
       const texture = entity.wall_text
-        ? this.cachedGlyphTexture(entity.wall_text, COLORS[entity.color], '#17201e')
+        ? this.cachedGlyphTexture(
+            entity.wall_text,
+            COLORS[entity.color],
+            "#17201e",
+          )
         : null;
-      components.push(this.cube(new THREE.Vector3(1, 1, 1), COLORS[entity.color], texture));
-    } else if (entity.type === 'Desk') {
-      components.push(this.cube(new THREE.Vector3(.9, .04, .9), COLORS.orange, null, new THREE.Vector3(0, .35, 0)));
-      for (const x of [-.4, .4]) for (const z of [-.4, .4])
-        components.push(this.cube(new THREE.Vector3(.04, .35, .04), '#333333', null, new THREE.Vector3(x, 0, z)));
-    } else if (entity.type === 'Avatar') {
-      components.push(this.cube(new THREE.Vector3(.05, .8, .4), '#000000', this.cachedAvatarTexture(entity)));
-    } else if (entity.type === 'ZoomLink') {
-      components.push(this.cube(new THREE.Vector3(.6, .6, .6), '#0000ff', this.cachedIconTexture(entity.type, '#2472d9')));
-    } else if (entity.type === 'Bot' && entity.emoji !== '👾') {
-      components.push(this.cube(new THREE.Vector3(.4, .4, .4), '#202020', this.cachedGlyphTexture(entity.emoji, '#202020', '#ffffff')));
-    } else if (entity.type === 'Link') {
-      components.push(this.cube(new THREE.Vector3(.8, .8, .8), '#114433', this.cachedIconTexture(entity.type)));
-    } else if (entity.type === 'Note') {
-      components.push(this.cube(new THREE.Vector3(1, 1, 1), COLORS.yellow, this.cachedIconTexture(entity.type)));
-    } else if (entity.type === 'AudioBlock' || entity.type === 'RC::Calendar') {
-      components.push(this.cube(new THREE.Vector3(.6, .6, .6), '#114433', this.cachedIconTexture(entity.type)));
-    } else if (entity.type === 'AudioRoom') {
-      const texture = this.cachedIconTexture(entity.type, null, { x: entity.width, y: entity.height });
-      components.push(this.cube(
-        new THREE.Vector3(entity.width, .002, entity.height), '#114433', texture,
-        new THREE.Vector3(entity.width / 2 - .5, 0, entity.height / 2 - .5),
-      ));
+      components.push(
+        this.cube(new THREE.Vector3(1, 1, 1), COLORS[entity.color], texture),
+      );
+    } else if (entity.type === "Desk") {
+      components.push(
+        this.cube(
+          new THREE.Vector3(0.9, 0.04, 0.9),
+          COLORS.orange,
+          null,
+          new THREE.Vector3(0, 0.35, 0),
+        ),
+      );
+      for (const x of [-0.4, 0.4])
+        for (const z of [-0.4, 0.4])
+          components.push(
+            this.cube(
+              new THREE.Vector3(0.04, 0.35, 0.04),
+              "#333333",
+              null,
+              new THREE.Vector3(x, 0, z),
+            ),
+          );
+    } else if (entity.type === "Avatar") {
+      components.push(
+        this.cube(
+          new THREE.Vector3(0.05, 0.8, 0.4),
+          "#000000",
+          this.cachedAvatarTexture(entity),
+        ),
+      );
+    } else if (entity.type === "ZoomLink") {
+      components.push(
+        this.cube(
+          new THREE.Vector3(0.6, 0.6, 0.6),
+          "#0000ff",
+          this.cachedIconTexture(entity.type, "#2472d9"),
+        ),
+      );
+    } else if (entity.type === "Bot" && entity.emoji !== "👾") {
+      components.push(
+        this.cube(
+          new THREE.Vector3(0.4, 0.4, 0.4),
+          "#202020",
+          this.cachedGlyphTexture(entity.emoji, "#202020", "#ffffff"),
+        ),
+      );
+    } else if (entity.type === "Link") {
+      components.push(
+        this.cube(
+          new THREE.Vector3(0.8, 0.8, 0.8),
+          "#114433",
+          this.cachedIconTexture(entity.type),
+        ),
+      );
+    } else if (entity.type === "Note") {
+      components.push(
+        this.cube(
+          new THREE.Vector3(1, 1, 1),
+          COLORS.yellow,
+          this.cachedIconTexture(entity.type),
+        ),
+      );
+    } else if (entity.type === "AudioBlock" || entity.type === "RC::Calendar") {
+      components.push(
+        this.cube(
+          new THREE.Vector3(0.6, 0.6, 0.6),
+          "#114433",
+          this.cachedIconTexture(entity.type),
+        ),
+      );
+    } else if (entity.type === "AudioRoom") {
+      const texture = this.cachedIconTexture(entity.type, null, {
+        x: entity.width,
+        y: entity.height,
+      });
+      components.push(
+        this.cube(
+          new THREE.Vector3(entity.width, 0.002, entity.height),
+          "#114433",
+          texture,
+          new THREE.Vector3(entity.width / 2 - 0.5, 0, entity.height / 2 - 0.5),
+        ),
+      );
     } else return null;
     return components;
   }
 }
 
 export const FIXTURE_WORLD: WorldEntity[] = [
-  { id: 'wall-a', type: 'Wall', pos: { x: 0, y: 0 }, color: 'blue', wall_text: 'A' },
-  { id: 'wall-rocket', type: 'Wall', pos: { x: 1, y: 0 }, color: 'pink', wall_text: '🚀' },
-  { id: 'wall-bike', type: 'Wall', pos: { x: 2, y: 0 }, color: 'orange', wall_text: '🚲' },
-  { id: 'wall-helicopter', type: 'Wall', pos: { x: 3, y: 0 }, color: 'green', wall_text: '🚁' },
-  { id: 'wall-3', type: 'Wall', pos: { x: 4, y: 0 }, color: 'purple' },
-  { id: 'wall-4', type: 'Wall', pos: { x: 5, y: 0 }, color: 'yellow' },
-  { id: 'desk-1', type: 'Desk', pos: { x: 1, y: 4 } },
-  { id: 'avatar-1', type: 'Avatar', pos: { x: 3, y: 4 }, name: 'Ada Lovelace', initials: 'AL', photo_color: '#d7b18a' },
-  { id: 'bot-1', type: 'Bot', pos: { x: 5, y: 4 }, name: 'Rocket', emoji: '🚀' },
-  { id: 'zoom-1', type: 'ZoomLink', pos: { x: 7, y: 0 } },
-  { id: 'link-1', type: 'Link', pos: { x: 8, y: 0 } },
-  { id: 'note-1', type: 'Note', pos: { x: 9, y: 0 } },
-  { id: 'audio-1', type: 'AudioBlock', pos: { x: 10, y: 0 } },
-  { id: 'calendar-1', type: 'RC::Calendar', pos: { x: 11, y: 0 } },
-  { id: 'room-1', type: 'AudioRoom', pos: { x: 7, y: 3 }, width: 4, height: 4 },
+  {
+    id: "wall-a",
+    type: "Wall",
+    pos: { x: 0, y: 0 },
+    color: "blue",
+    wall_text: "A",
+  },
+  {
+    id: "wall-rocket",
+    type: "Wall",
+    pos: { x: 1, y: 0 },
+    color: "pink",
+    wall_text: "🚀",
+  },
+  {
+    id: "wall-bike",
+    type: "Wall",
+    pos: { x: 2, y: 0 },
+    color: "orange",
+    wall_text: "🚲",
+  },
+  {
+    id: "wall-helicopter",
+    type: "Wall",
+    pos: { x: 3, y: 0 },
+    color: "green",
+    wall_text: "🚁",
+  },
+  { id: "wall-3", type: "Wall", pos: { x: 4, y: 0 }, color: "purple" },
+  { id: "wall-4", type: "Wall", pos: { x: 5, y: 0 }, color: "yellow" },
+  { id: "desk-1", type: "Desk", pos: { x: 1, y: 4 } },
+  {
+    id: "avatar-1",
+    type: "Avatar",
+    pos: { x: 3, y: 4 },
+    name: "Ada Lovelace",
+    initials: "AL",
+    photo_color: "#d7b18a",
+  },
+  {
+    id: "bot-1",
+    type: "Bot",
+    pos: { x: 5, y: 4 },
+    name: "Rocket",
+    emoji: "🚀",
+  },
+  { id: "zoom-1", type: "ZoomLink", pos: { x: 7, y: 0 } },
+  { id: "link-1", type: "Link", pos: { x: 8, y: 0 } },
+  { id: "note-1", type: "Note", pos: { x: 9, y: 0 } },
+  { id: "audio-1", type: "AudioBlock", pos: { x: 10, y: 0 } },
+  { id: "calendar-1", type: "RC::Calendar", pos: { x: 11, y: 0 } },
+  { id: "room-1", type: "AudioRoom", pos: { x: 7, y: 3 }, width: 4, height: 4 },
 ];
 
-export function buildWorld(scene: THREE.Scene, initialEntities: EntityUpdate[] = FIXTURE_WORLD): VirtualRcRenderer {
-  scene.fog = new THREE.Fog('#172322', 35, 85);
+export function buildWorld(
+  scene: THREE.Scene,
+  initialEntities: EntityUpdate[] = FIXTURE_WORLD,
+): VirtualRcRenderer {
+  scene.fog = new THREE.Fog("#172322", 35, 85);
   const renderer = new VirtualRcRenderer(scene);
-  initialEntities.forEach(entity => renderer.handleEntity(entity));
+  initialEntities.forEach((entity) => renderer.handleEntity(entity));
   return renderer;
 }

@@ -19,7 +19,10 @@ function randomToken() {
   return randomBytes(32).toString("base64url");
 }
 
-function tokensMatch(left: string | null | undefined, right: string | null | undefined): boolean {
+function tokensMatch(
+  left: string | null | undefined,
+  right: string | null | undefined,
+): boolean {
   if (!left || !right) return false;
 
   const leftBytes = Buffer.from(left);
@@ -31,9 +34,15 @@ function tokensMatch(left: string | null | undefined, right: string | null | und
   );
 }
 
-interface OAuthTokenResponse { access_token?: unknown; error?: unknown; [key: string]: unknown }
+interface OAuthTokenResponse {
+  access_token?: unknown;
+  error?: unknown;
+  [key: string]: unknown;
+}
 
-async function exchangeAuthorizationCode(code: string): Promise<OAuthTokenResponse> {
+async function exchangeAuthorizationCode(
+  code: string,
+): Promise<OAuthTokenResponse> {
   if (!oauthClientId || !oauthClientSecret || !oauthRedirectUri) {
     throw new Error("OAuth is not configured");
   }
@@ -54,10 +63,15 @@ async function exchangeAuthorizationCode(code: string): Promise<OAuthTokenRespon
     body,
   });
 
-  const result = await response.json().catch(() => null) as OAuthTokenResponse | null;
+  const result = (await response
+    .json()
+    .catch(() => null)) as OAuthTokenResponse | null;
 
   if (!response.ok) {
-    const oauthError = typeof result?.error === "string" ? result.error : `HTTP ${response.status}`;
+    const oauthError =
+      typeof result?.error === "string"
+        ? result.error
+        : `HTTP ${response.status}`;
     throw new Error(`Recurse token exchange failed: ${oauthError}`);
   }
 
@@ -94,7 +108,8 @@ const configuredOrigins = new Set(
 );
 
 function isAllowedOrigin(origin: string | null): boolean {
-  if (configuredOrigins.size) return origin !== null && configuredOrigins.has(origin);
+  if (configuredOrigins.size)
+    return origin !== null && configuredOrigins.has(origin);
   return (
     origin === "http://127.0.0.1:5173" || origin === "http://localhost:5173"
   );
@@ -170,7 +185,7 @@ function connectUpstream() {
   upstreamStatus = "connecting";
   broadcast({ type: "status", status: upstreamStatus });
   const WebSocketWithOptions = WebSocket as unknown as {
-    new(url: string, options: Bun.WebSocketOptions): WebSocket;
+    new (url: string, options: Bun.WebSocketOptions): WebSocket;
   };
   upstream = new WebSocketWithOptions(config.url, {
     headers: { Origin: config.origin },
@@ -227,7 +242,11 @@ const server = Bun.serve({
     "/api/session": {
       GET(request) {
         return Response.json(
-          { authenticated: Boolean(validSession(request.cookies.get("session"))) },
+          {
+            authenticated: Boolean(
+              validSession(request.cookies.get("session")),
+            ),
+          },
           { headers: { "cache-control": "no-store" } },
         );
       },
@@ -308,7 +327,9 @@ const server = Bun.serve({
             },
           });
         } catch (error) {
-          console.error(`OAuth callback failed: ${error instanceof Error ? error.message : String(error)}`);
+          console.error(
+            `OAuth callback failed: ${error instanceof Error ? error.message : String(error)}`,
+          );
 
           return new Response("Could not complete Recurse authorization", {
             status: 502,

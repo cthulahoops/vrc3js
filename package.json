@@ -8,6 +8,8 @@
     "dev:web": "vite --host localhost",
     "dev:bff": "bun server/index.ts",
     "build": "vite build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "preview": "vite preview --host localhost",
     "verify:screenshot": "tsx scripts/render-verification.ts",
     "test": "tsx --test test/*.test.ts",
@@ -24,6 +26,7 @@
     "@playwright/test": "^1.62.1",
     "@types/bun": "^1.4.0",
     "@types/three": "^0.179.0",
+    "prettier": "^3.9.6",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
     "vite": "^7.1.3"

@@ -22,7 +22,9 @@ export function createSession() {
   return id;
 }
 
-export function validSession(sessionId: string | null | undefined): string | undefined {
+export function validSession(
+  sessionId: string | null | undefined,
+): string | undefined {
   if (!sessionId) return undefined;
 
   const expiresAt = sessions.get(sessionId);

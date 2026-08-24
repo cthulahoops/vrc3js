@@ -10,31 +10,52 @@
     <div id="app">
       <canvas id="world" aria-label="Interactive 3D spatial office"></canvas>
       <header class="topbar">
-        <a class="brand" href="https://github.com/cthulahoops/vrc3d" target="_blank" rel="noreferrer">
+        <a
+          class="brand"
+          href="https://github.com/cthulahoops/vrc3d"
+          target="_blank"
+          rel="noreferrer"
+        >
           <span class="brand-mark">V</span>
           <span><strong>VRC3D</strong><small>THREE.JS PROTOTYPE</small></span>
         </a>
-        <div class="status" id="connection-status"><i></i><span class="status-label">Connecting to world</span></div>
+        <div class="status" id="connection-status">
+          <i></i><span class="status-label">Connecting to world</span>
+        </div>
       </header>
       <aside class="legend">
         <p>ENTITY TYPES</p>
         <div id="nearby"></div>
       </aside>
       <div class="reticle" aria-hidden="true"></div>
-      <section id="login" class="gate" aria-labelledby="login-title" aria-describedby="login-copy auth-status">
+      <section
+        id="login"
+        class="gate"
+        aria-labelledby="login-title"
+        aria-describedby="login-copy auth-status"
+      >
         <div class="gate-card">
           <h1 id="login-title">Sign in to Virtual RC 3D</h1>
-          <a id="login-link" class="primary-action" href="/auth/login" hidden>Log in</a>
-          <p id="auth-status" class="auth-status" aria-live="polite">Checking your session…</p>
+          <a id="login-link" class="primary-action" href="/auth/login" hidden
+            >Log in</a
+          >
+          <p id="auth-status" class="auth-status" aria-live="polite">
+            Checking your session…
+          </p>
         </div>
       </section>
       <section id="welcome" class="welcome hidden">
         <h1>Step inside.</h1>
         <p>A browser-based sketch of the VRC3D spatial office.</p>
         <button id="enter">Enter world <span>↗</span></button>
-        <div class="controls"><span><kbd>WASD</kbd> move</span><span><kbd>MOUSE</kbd> look</span><span><kbd>ESC</kbd> release</span></div>
+        <div class="controls">
+          <span><kbd>WASD</kbd> move</span><span><kbd>MOUSE</kbd> look</span
+          ><span><kbd>ESC</kbd> release</span>
+        </div>
       </section>
-      <footer class="hint" id="hint">Click anywhere to look around · WASD to move</footer>
+      <footer class="hint" id="hint">
+        Click anywhere to look around · WASD to move
+      </footer>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
