@@ -17,7 +17,6 @@ html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 .person .face { display: grid; place-items: center; width: 23px; height: 23px; border-radius: 7px; font-size: 12px; }.person em { margin-left: auto; width: 5px; height: 5px; background: #70d086; border-radius: 50%; }
 .welcome, .gate { position: fixed; z-index: 5; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: radial-gradient(circle at 50% 52%, #13201fb0, #0a1010de); backdrop-filter: blur(3px); transition: opacity .5s, visibility .5s; }
 .welcome.hidden, .gate.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
-.eyebrow { color: #89a69d; font: 10px DM Mono; letter-spacing: .25em; }
 .welcome h1 { margin: 12px 0 6px; font-size: clamp(42px, 7vw, 78px); line-height: 1; letter-spacing: -.055em; }.welcome p { color: #aeb9b4; font-size: 14px; }
 .welcome button { margin-top: 21px; padding: 14px 20px; border: 0; border-radius: 7px; background: #ecf0e9; color: #13201d; font: 600 12px Manrope; cursor: pointer; }.welcome button span { margin-left: 24px; }
 .gate-card { width: min(440px, calc(100% - 36px)); padding: 42px 42px 36px; border: 1px solid #ffffff1f; border-radius: 18px; background: #101918c9; box-shadow: 0 28px 80px #02070780; backdrop-filter: blur(16px); }
