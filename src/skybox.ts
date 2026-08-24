@@ -1,8 +1,17 @@
-import * as THREE from 'three';
-import { Body, Equator, Horizon, Observer, SiderealTime } from 'astronomy-engine';
-import type { HorizontalCoordinates } from 'astronomy-engine';
+import * as THREE from "three";
+import {
+  Body,
+  Equator,
+  Horizon,
+  Observer,
+  SiderealTime,
+} from "astronomy-engine";
+import type { HorizontalCoordinates } from "astronomy-engine";
 
-export interface SkyLocation { latitude: number; longitude: number }
+export interface SkyLocation {
+  latitude: number;
+  longitude: number;
+}
 export interface SkyboxOptions {
   starMapUrl?: string;
   moonMapUrl?: string;
@@ -14,7 +23,10 @@ export interface SkyboxOptions {
   date?: Date;
 }
 
-interface LoadedSkyboxOptions extends Omit<SkyboxOptions, "starMapUrl" | "moonMapUrl"> {
+interface LoadedSkyboxOptions extends Omit<
+  SkyboxOptions,
+  "starMapUrl" | "moonMapUrl"
+> {
   starMap: THREE.Texture;
   moonMap: THREE.Texture;
 }
@@ -32,12 +44,15 @@ interface SkyUniforms {
 }
 
 // The location used by the original renderer (Bridge Street, Brooklyn).
-export const SKY_LOCATION = Object.freeze({ latitude: 39.6913, longitude: -73.985 });
+export const SKY_LOCATION = Object.freeze({
+  latitude: 39.6913,
+  longitude: -73.985,
+});
 
 // Keep the original art in this repository so rendering does not depend on
 // the availability or CORS policy of the upstream project.
-const STAR_MAP_URL = new URL('./assets/starmap.png', import.meta.url).href;
-const MOON_MAP_URL = new URL('./assets/moon.png', import.meta.url).href;
+const STAR_MAP_URL = new URL("./assets/starmap.png", import.meta.url).href;
+const MOON_MAP_URL = new URL("./assets/moon.png", import.meta.url).href;
 
 // Atmospheric scattering is smooth across the dome. Evaluating the upstream
 // integration at mesh vertices preserves its model and constants without
@@ -210,7 +225,10 @@ const fragmentShader = /* glsl */ `
   }
 `;
 
-function horizontalPosition(horizontal: HorizontalCoordinates, target = new THREE.Vector3()): THREE.Vector3 {
+function horizontalPosition(
+  horizontal: HorizontalCoordinates,
+  target = new THREE.Vector3(),
+): THREE.Vector3 {
   const altitude = THREE.MathUtils.degToRad(horizontal.altitude);
   const azimuth = THREE.MathUtils.degToRad(horizontal.azimuth);
   return target.set(
@@ -220,7 +238,11 @@ function horizontalPosition(horizontal: HorizontalCoordinates, target = new THRE
   );
 }
 
-function observe(body: Body, date: Date, observer: Observer): HorizontalCoordinates {
+function observe(
+  body: Body,
+  date: Date,
+  observer: Observer,
+): HorizontalCoordinates {
   const equatorial = Equator(body, date, observer, true, true);
   // Skyfield's altaz() call in the original does not apply atmospheric
   // refraction unless pressure/temperature are supplied.
@@ -228,7 +250,7 @@ function observe(body: Body, date: Date, observer: Observer): HorizontalCoordina
 }
 
 function loadTexture(url: string): Promise<THREE.Texture> {
-  return new THREE.TextureLoader().loadAsync(url).then(texture => {
+  return new THREE.TextureLoader().loadAsync(url).then((texture) => {
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
     texture.minFilter = THREE.LinearMipmapLinearFilter;
@@ -248,7 +270,10 @@ export class Skybox {
   readonly material: THREE.ShaderMaterial;
   readonly mesh: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
 
-  static async create(scene: THREE.Scene, options: SkyboxOptions = {}): Promise<Skybox> {
+  static async create(
+    scene: THREE.Scene,
+    options: SkyboxOptions = {},
+  ): Promise<Skybox> {
     const [starMap, moonMap] = await Promise.all([
       loadTexture(options.starMapUrl ?? STAR_MAP_URL),
       loadTexture(options.moonMapUrl ?? MOON_MAP_URL),
@@ -256,16 +281,19 @@ export class Skybox {
     return new Skybox(scene, { ...options, starMap, moonMap });
   }
 
-  constructor(scene: THREE.Scene, {
-    starMap,
-    moonMap,
-    showGrid = false,
-    showAtmosphere = true,
-    location = SKY_LOCATION,
-    directionalLight = null,
-    updateInterval = 500,
-    date = new Date(),
-  }: LoadedSkyboxOptions) {
+  constructor(
+    scene: THREE.Scene,
+    {
+      starMap,
+      moonMap,
+      showGrid = false,
+      showAtmosphere = true,
+      location = SKY_LOCATION,
+      directionalLight = null,
+      updateInterval = 500,
+      date = new Date(),
+    }: LoadedSkyboxOptions,
+  ) {
     this.scene = scene;
     this.observer = new Observer(location.latitude, location.longitude, 0);
     this.location = location;
@@ -293,8 +321,11 @@ export class Skybox {
       fog: false,
       toneMapped: false,
     });
-    this.mesh = new THREE.Mesh(new THREE.SphereGeometry(50, 64, 32), this.material);
-    this.mesh.name = 'Astronomical skybox';
+    this.mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(50, 64, 32),
+      this.material,
+    );
+    this.mesh.name = "Astronomical skybox";
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = -10_000;
     this.mesh.onBeforeRender = (_renderer, _scene, camera) => {
@@ -307,7 +338,8 @@ export class Skybox {
 
   update(date = new Date(), force = false): boolean {
     const timestamp = date.getTime();
-    if (!force && timestamp - this.lastUpdate < this.updateInterval) return false;
+    if (!force && timestamp - this.lastUpdate < this.updateInterval)
+      return false;
     this.lastUpdate = timestamp;
 
     const sun = observe(Body.Sun, date, this.observer);
@@ -325,10 +357,16 @@ export class Skybox {
 
     this.uniforms.moon_matrix.value
       .makeRotationX(-THREE.MathUtils.degToRad(moon.altitude))
-      .multiply(new THREE.Matrix4().makeRotationY(THREE.MathUtils.degToRad(moon.azimuth)));
+      .multiply(
+        new THREE.Matrix4().makeRotationY(
+          THREE.MathUtils.degToRad(moon.azimuth),
+        ),
+      );
 
     if (this.directionalLight) {
-      this.directionalLight.position.copy(this.uniforms.sun_position.value).multiplyScalar(20);
+      this.directionalLight.position
+        .copy(this.uniforms.sun_position.value)
+        .multiplyScalar(20);
       // The upstream renderer projects the light from below the ground after
       // sunset. Three.js then produces upward-facing illumination and invalid
       // shadow maps, so remove the solar light while it is below the horizon.
