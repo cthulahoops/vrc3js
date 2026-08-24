@@ -8,22 +8,32 @@ A Three.js port of the rendering core from [cthulahoops/vrc3d](https://github.co
 npm install
 export RC_APP_ID=<app_id>
 export RC_APP_SECRET=<app_secret>
+export OAUTH_CLIENT_ID=<oauth_client_id>
+export OAUTH_CLIENT_SECRET=<oauth_client_secret>
+export OAUTH_REDIRECT_URI=http://localhost:5173/auth/callback
+export APP_ORIGIN=http://localhost:5173
 npm run dev
 ```
 
-Open `http://localhost:5173`, select **Enter world**, then use the mouse to look and WASD to move. Press Escape to release the mouse. Set `RC_ENDPOINT` to override the default `recurse.rctogether.com` upstream host.
+Open `http://localhost:5173`, sign in with Recurse Center, and select **Enter world**. Then use the mouse to look and WASD to move. Press Escape to release the mouse. Set `RC_ENDPOINT` to override the default `recurse.rctogether.com` upstream host.
 
 The upstream WebSocket accepts world snapshots up to 16 MiB by default. Set `RC_MAX_PAYLOAD_BYTES` to a larger byte count if the configured world requires it.
 
-`npm run dev` starts Vite and the BFF on loopback only. Vite proxies `/api/world` WebSocket upgrades to the BFF at `localhost:8787`. To run them independently, use `npm run dev:web` and `npm run dev:bff`; `BFF_HOST`, `BFF_PORT`, and the Vite proxy must agree if those defaults are changed.
+`npm run dev` starts Vite and the BFF on loopback only. Vite proxies `/api` requests and `/auth` redirects to the BFF at `localhost:8787`. To run them independently, use `npm run dev:web` and `npm run dev:bff`; `BFF_HOST`, `BFF_PORT`, and the Vite proxy must agree if those defaults are changed.
 
-The development BFF intentionally has no user authentication. It accepts browser connections only from `http://localhost:5173` and `http://localhost:5173` by default. `BFF_ALLOWED_ORIGINS` can provide a comma-separated exact allowlist, but authentication and HTTPS are required before exposing the service beyond localhost. RC credentials remain server-side and must never use Vite's client-visible `VITE_*` environment variables.
+The BFF authenticates visitors through Recurse Center OAuth before accepting a world WebSocket. Register `OAUTH_REDIRECT_URI` as the OAuth application's callback URL; `APP_ORIGIN` is where successful callbacks return. Sessions are stored in memory for 24 hours, so restarting the BFF signs everyone out. The service accepts browser connections only from `http://127.0.0.1:5173` and `http://localhost:5173` by default. `BFF_ALLOWED_ORIGINS` can provide a comma-separated exact allowlist. All credentials remain server-side and must never use Vite's client-visible `VITE_*` environment variables.
 
 ## Screenshots
 
 The Playwright verifier accepts protocol-shaped entities, camera position and
 orientation (yaw/pitch/roll in radians), and an ISO sky time in a JSON fixture.
 Install its managed Chromium once after installing dependencies:
+
+Use [Rodney](https://github.com/simonw/rodney) for browser checks and screenshots.
+The `screenshot` query parameter renders a static camera and exposes a ready
+marker after WebGL finishes, so Rodney cannot capture a partial frame. A fresh
+browser session will show the login screen; world screenshots require an
+authenticated browser session:
 
 ```bash
 npx playwright install chromium

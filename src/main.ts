@@ -29,6 +29,10 @@ function requiredElement<T extends Element>(selector: string): T {
 const canvas = requiredElement<HTMLCanvasElement>('#world');
 const query = new URLSearchParams(location.search);
 const verificationMode = query.has('verify');
+const login = requiredElement<HTMLElement>('#login');
+const loginLink = requiredElement<HTMLAnchorElement>('#login-link');
+const authStatus = requiredElement<HTMLElement>('#auth-status');
+const welcome = requiredElement<HTMLElement>('#welcome');
 const screenshotMode = query.has('screenshot') || verificationMode;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: screenshotMode });
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;
@@ -101,6 +105,7 @@ function setConnectionStatus(status: ConnectionStatus) {
     reconnecting: 'Reconnecting to world', disconnected: 'World stream disconnected',
     unconfigured: 'RC credentials required',
     verification: 'Verification fixture',
+    unauthenticated: 'Sign in to connect',
   };
   connectionStatus.dataset.state = status;
   requiredElement<HTMLElement>('#connection-status .status-label').textContent = labels[status] || 'World stream unavailable';
@@ -110,13 +115,34 @@ const streamHandlers = {
   onEntity(entity) { world.handleEntity(entity); updateLegendEntity(entity.id); renderer.shadowMap.needsUpdate = true; if (screenshotMode) renderScreenshot(); },
   onStatus: setConnectionStatus,
 } satisfies Parameters<typeof connectWorldStream>[0];
+interface SessionResponse { authenticated?: unknown }
+
+async function startAuthenticatedApp() {
+  try {
+    const response = await fetch('/api/session', { headers: { accept: 'application/json' } });
+    const session = response.ok ? await response.json() as SessionResponse : null;
+    if (!session?.authenticated) {
+      loginLink.hidden = false;
+      authStatus.textContent = 'Recurse Center members only';
+      setConnectionStatus('unauthenticated');
+      return;
+    }
+
+    login.classList.add('hidden');
+    welcome.classList.remove('hidden');
+    connectWorldStream(streamHandlers);
+  } catch {
+    loginLink.hidden = false;
+    authStatus.textContent = 'Unable to check your session. You can still try signing in.';
+    setConnectionStatus('disconnected');
+  }
+}
 if (verificationMode) setConnectionStatus('verification');
-else connectWorldStream(streamHandlers);
+else void startAuthenticatedApp();
 
 let yaw = 0, pitch = -.04, active = false; const keys = new Set(); const clock = new THREE.Clock();
 let verificationHasFixture = false;
 let verificationFramesUntilReady = 0;
-const welcome = requiredElement<HTMLElement>('#welcome');
 const hint = requiredElement<HTMLElement>('#hint');
 function lock() { canvas.requestPointerLock(); welcome.classList.add('hidden'); }
 requiredElement<HTMLElement>('#enter').addEventListener('click', lock); canvas.addEventListener('click', () => { if (welcome.classList.contains('hidden')) lock(); });
