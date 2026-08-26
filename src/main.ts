@@ -7,7 +7,11 @@ import "@fontsource/dm-mono/latin-400.css";
 import "@fontsource/dm-mono/latin-500.css";
 import { connectWorldStream } from "./network.js";
 import type { ConnectionStatus } from "./network.js";
-import type { EntityId } from "../server/protocol.js";
+import type {
+  EntityId,
+  EntityUpdate,
+  WorldEntity,
+} from "../server/protocol.js";
 import {
   applyRenderQuality,
   createAdaptivePixelRatio,
@@ -87,6 +91,48 @@ const shadowSunDirection = skybox.sunDirection.clone();
 const shadowSunThreshold = THREE.MathUtils.degToRad(0.25);
 let shadowSunVisible = sun.visible;
 const world = buildWorld(scene, []);
+const avatarImageUrls = new Map<EntityId, string>();
+
+function syncAvatarImage(entity: EntityUpdate): void {
+  const imageUrl =
+    !("deleted" in entity) && entity.type === "Avatar"
+      ? entity.image_url
+      : undefined;
+  if (!imageUrl) {
+    avatarImageUrls.delete(entity.id);
+    world.clearAvatarImage(entity.id);
+    return;
+  }
+  if (avatarImageUrls.get(entity.id) === imageUrl) return;
+  avatarImageUrls.set(entity.id, imageUrl);
+  world.clearAvatarImage(entity.id);
+
+  const image = new Image();
+  image.onload = () => {
+    if (avatarImageUrls.get(entity.id) === imageUrl)
+      void world.setAvatarImage(entity.id, image);
+  };
+  image.onerror = () => {
+    if (avatarImageUrls.get(entity.id) === imageUrl)
+      console.warn(`Could not load avatar image for ${entity.id}.`);
+  };
+  image.src = imageUrl;
+}
+
+function syncSnapshotAvatarImages(entities: EntityUpdate[]): void {
+  const incoming = new Set(
+    entities
+      .filter((entity): entity is WorldEntity => !("deleted" in entity))
+      .map((entity) => entity.id),
+  );
+  for (const id of avatarImageUrls.keys()) {
+    if (!incoming.has(id)) {
+      avatarImageUrls.delete(id);
+      world.clearAvatarImage(id);
+    }
+  }
+  entities.forEach(syncAvatarImage);
+}
 const nearby = requiredElement<HTMLElement>("#nearby");
 const connectionStatus = requiredElement<HTMLElement>("#connection-status");
 const legendEntityTypes = new Map<EntityId, string>();
@@ -155,12 +201,14 @@ function setConnectionStatus(status: ConnectionStatus) {
 const streamHandlers = {
   onSnapshot(entities) {
     world.replaceEntities(entities);
+    syncSnapshotAvatarImages(entities);
     resetLegend();
     renderer.shadowMap.needsUpdate = true;
     if (screenshotMode) renderScreenshot();
   },
   onEntity(entity) {
     world.handleEntity(entity);
+    syncAvatarImage(entity);
     updateLegendEntity(entity.id);
     renderer.shadowMap.needsUpdate = true;
     if (screenshotMode) renderScreenshot();

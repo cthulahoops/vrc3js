@@ -66,6 +66,10 @@ credentials and upstream state.
 
 Snapshots replace the renderer's entire entity set; entity messages are incremental. The exported `FIXTURE_WORLD` remains available for renderer development and tests, but the application starts with an empty scene and waits for the shared stream.
 
+Avatar photo URLs remain server-side. Authenticated browsers receive cache-busted
+`/api/avatars/:id` references, and the BFF fetches the corresponding upstream
+image so canvas textures remain same-origin.
+
 Sky textures are stored in `src/assets`, and UI fonts are installed from npm,
 so those assets do not rely on third-party hosts at runtime. Source revisions
 and file checksums are recorded alongside the vendored files.

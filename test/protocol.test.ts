@@ -5,18 +5,31 @@ import {
   sanitizeEntity,
 } from "../server/protocol.js";
 
-test("sanitizes supported entities and strips upstream-only fields", () => {
+test("sanitizes avatars and replaces upstream image paths with local URLs", () => {
+  const observed: Array<[string, string | undefined]> = [];
   assert.deepEqual(
-    sanitizeEntity({
-      id: 42,
+    sanitizeEntity(
+      {
+        id: 42,
+        type: "Avatar",
+        pos: { x: 3, y: 4 },
+        name: "Ada",
+        image_path: "https://private/image",
+        photo_color: "#abcdef",
+        admin: true,
+      },
+      (id, path) => observed.push([id, path]),
+    ),
+    {
+      id: "42",
       type: "Avatar",
       pos: { x: 3, y: 4 },
       name: "Ada",
-      image_path: "https://private/image",
-      admin: true,
-    }),
-    { id: "42", type: "Avatar", pos: { x: 3, y: 4 }, name: "Ada" },
+      photo_color: "#abcdef",
+      image_url: "/api/avatars/42?v=112txgb",
+    },
   );
+  assert.deepEqual(observed, [["42", "https://private/image"]]);
 });
 
 test("accepts deletion events without a position", () => {
