@@ -93,6 +93,7 @@ const reconnectMinimumMs = 1_000;
 const reconnectMaximumMs = 30_000;
 const subscriptionIdentifier = JSON.stringify({ channel: "ApiChannel" });
 const world = new Map<string, EntityUpdate>();
+const avatarImagePaths = new Map<string, string>();
 let hasSnapshot = false;
 let upstream: WebSocket | undefined;
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -141,9 +142,16 @@ function replaceWorld(entities: EntityUpdate[]): void {
   broadcast({ type: "snapshot", entities: [...world.values()] });
 }
 
+function replaceAvatarImagePaths(images: Map<string, string>): void {
+  avatarImagePaths.clear();
+  for (const [id, path] of images) avatarImagePaths.set(id, path);
+}
+
 function updateWorld(entity: EntityUpdate): void {
-  if ("deleted" in entity) world.delete(entity.id);
-  else world.set(entity.id, entity);
+  if ("deleted" in entity) {
+    world.delete(entity.id);
+    avatarImagePaths.delete(entity.id);
+  } else world.set(entity.id, entity);
   broadcast({ type: "entity", entity });
 }
 
@@ -204,7 +212,14 @@ function connectUpstream() {
       return;
     }
 
-    const message = decodeActionCableMessage(raw, subscriptionIdentifier);
+    const observedAvatarImages = new Map<string, string>();
+    const message = decodeActionCableMessage(
+      raw,
+      subscriptionIdentifier,
+      (id, path) => {
+        if (path) observedAvatarImages.set(id, path);
+      },
+    );
     if (message.kind === "welcome") {
       connectedSocket.send(
         encode({ command: "subscribe", identifier: subscriptionIdentifier }),
@@ -217,8 +232,14 @@ function connectUpstream() {
       connectedSocket.close();
     } else if (message.kind === "snapshot") {
       reconnectDelay = reconnectMinimumMs;
+      replaceAvatarImagePaths(observedAvatarImages);
       replaceWorld(message.entities);
     } else if (message.kind === "entity") {
+      if (message.entity.type === "Avatar") {
+        const imagePath = observedAvatarImages.get(message.entity.id);
+        if (imagePath) avatarImagePaths.set(message.entity.id, imagePath);
+        else avatarImagePaths.delete(message.entity.id);
+      }
       updateWorld(message.entity);
     } else if (message.kind === "invalid") {
       console.warn("Dropped an invalid upstream message.");
@@ -249,6 +270,46 @@ const server = Bun.serve({
           },
           { headers: { "cache-control": "no-store" } },
         );
+      },
+    },
+
+    "/api/avatars/:id": {
+      async GET(request) {
+        if (!validSession(request.cookies.get("session")))
+          return new Response("Unauthorized", { status: 401 });
+
+        const imagePath = avatarImagePaths.get(request.params.id);
+        const upstreamOrigin = upstreamConfiguration()?.origin;
+        if (!imagePath || !upstreamOrigin)
+          return new Response("Avatar image not found", { status: 404 });
+
+        let imageUrl: URL;
+        try {
+          imageUrl = new URL(imagePath, upstreamOrigin);
+        } catch {
+          return new Response("Invalid avatar image URL", { status: 502 });
+        }
+        if (imageUrl.protocol !== "https:")
+          return new Response("Invalid avatar image URL", { status: 502 });
+
+        try {
+          const response = await fetch(imageUrl, {
+            headers: { accept: "image/*" },
+            redirect: "follow",
+          });
+          const contentType = response.headers.get("content-type") || "";
+          if (!response.ok || !contentType.toLowerCase().startsWith("image/"))
+            return new Response("Could not load avatar image", { status: 502 });
+          return new Response(response.body, {
+            headers: {
+              "content-type": contentType,
+              "cache-control": "private, max-age=3600",
+              "x-content-type-options": "nosniff",
+            },
+          });
+        } catch {
+          return new Response("Could not load avatar image", { status: 502 });
+        }
       },
     },
 

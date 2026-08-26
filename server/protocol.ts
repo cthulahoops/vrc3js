@@ -44,6 +44,7 @@ export interface AvatarEntity extends EntityBase {
   name?: string;
   initials?: string;
   photo_color?: string;
+  image_url?: string;
 }
 export interface BotEntity extends EntityBase {
   type: "Bot";
@@ -102,8 +103,27 @@ function limitedString(
   return typeof value === "string" ? value.slice(0, maximumLength) : undefined;
 }
 
+function avatarImageVersion(path: string): string {
+  // This is only a cache key, not a security boundary. Keeping the upstream
+  // path out of the browser protocol avoids leaking signed image URLs.
+  let hash = 2166136261;
+  for (let index = 0; index < path.length; index += 1) {
+    hash ^= path.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+export type AvatarImageObserver = (
+  id: EntityId,
+  imagePath: string | undefined,
+) => void;
+
 /** Keep the browser protocol deliberately smaller than the upstream entity. */
-export function sanitizeEntity(value: unknown): EntityUpdate | null {
+export function sanitizeEntity(
+  value: unknown,
+  onAvatarImage?: AvatarImageObserver,
+): EntityUpdate | null {
   if (!isRecord(value)) return null;
   if (
     (typeof value.id !== "string" && typeof value.id !== "number") ||
@@ -138,12 +158,21 @@ export function sanitizeEntity(value: unknown): EntityUpdate | null {
   if (type === "Avatar") {
     const name = limitedString(value.name, 100);
     const initials = limitedString(value.initials, 4);
+    const photoColor = limitedString(value.photo_color, 32);
+    const imagePath = limitedString(value.image_path, 2_048);
+    onAvatarImage?.(id, imagePath);
     return {
       id,
       type,
       pos,
       ...(name ? { name } : {}),
       ...(initials ? { initials } : {}),
+      ...(photoColor ? { photo_color: photoColor } : {}),
+      ...(imagePath
+        ? {
+            image_url: `/api/avatars/${encodeURIComponent(id)}?v=${avatarImageVersion(imagePath)}`,
+          }
+        : {}),
     };
   }
   if (type === "Bot") {
@@ -170,6 +199,7 @@ export function sanitizeEntity(value: unknown): EntityUpdate | null {
 export function decodeActionCableMessage(
   raw: string | ArrayBuffer | ArrayBufferView,
   subscriptionIdentifier: string,
+  onAvatarImage?: AvatarImageObserver,
 ): DecodedActionCableMessage {
   let data: unknown;
   try {
@@ -194,11 +224,11 @@ export function decodeActionCableMessage(
     return {
       kind: "snapshot",
       entities: values
-        .map(sanitizeEntity)
+        .map((value) => sanitizeEntity(value, onAvatarImage))
         .filter((entity): entity is EntityUpdate => entity !== null),
     };
   }
 
-  const entity = sanitizeEntity(data.message.payload);
+  const entity = sanitizeEntity(data.message.payload, onAvatarImage);
   return entity ? { kind: "entity", entity } : { kind: "invalid" };
 }

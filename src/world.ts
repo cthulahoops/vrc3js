@@ -10,7 +10,7 @@ import type {
   WorldEntity,
 } from "../server/protocol.js";
 
-type ImageAsset = CanvasImageSource;
+type ImageAsset = HTMLImageElement | HTMLCanvasElement | ImageBitmap;
 interface EmojiSprite {
   x: number;
   y: number;
@@ -129,9 +129,11 @@ export async function loadWorldAssets() {
 function canvasTexture(
   draw: (context: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void,
   repeat: THREE.Vector2 | null = null,
+  size: { width: number; height: number } = { width: 256, height: 256 },
 ): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 256;
+  canvas.width = size.width;
+  canvas.height = size.height;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Canvas 2D rendering is unavailable");
   draw(context, canvas);
@@ -248,11 +250,26 @@ function avatarTexture(
   image?: ImageAsset,
 ): THREE.CanvasTexture {
   if (image)
-    return canvasTexture((context, canvas) => {
-      context.fillStyle = "#cccccc";
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    });
+    return canvasTexture(
+      (context, canvas) => {
+        context.fillStyle = "#cccccc";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        const sourceWidth = image.width;
+        const sourceHeight = image.height;
+        const scale = Math.max(canvas.width / sourceWidth, 128 / sourceHeight);
+        const width = sourceWidth * scale;
+        const height = sourceHeight * scale;
+        context.drawImage(
+          image,
+          (canvas.width - width) / 2,
+          (128 - height) / 2,
+          width,
+          height,
+        );
+      },
+      null,
+      { width: 128, height: 256 },
+    );
   const initials =
     entity.initials ||
     entity.name
@@ -261,7 +278,21 @@ function avatarTexture(
       .join("")
       .slice(0, 2) ||
     "?";
-  return faceTexture(initials, entity.photo_color || "#c8ceca");
+  return canvasTexture(
+    (context, canvas) => {
+      context.fillStyle = "#cccccc";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = entity.photo_color || "#c8ceca";
+      context.fillRect(0, 0, canvas.width, 128);
+      context.fillStyle = "#16201e";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.font = "600 82px sans-serif";
+      context.fillText(initials, canvas.width / 2, 67, 112);
+    },
+    null,
+    { width: 128, height: 256 },
+  );
 }
 
 function valuesEqual(
@@ -482,6 +513,16 @@ export class VirtualRcRenderer {
     if (previousVersion) this.disposeAvatarImageVersion(id, previousVersion);
   }
 
+  clearAvatarImage(id: EntityId): void {
+    if (!this.avatarImages.has(id)) return;
+    const previousVersion = this.avatarImageVersions.get(id) || 0;
+    this.avatarImages.delete(id);
+    this.avatarImageVersions.delete(id);
+    const current = this.entities.get(id)?.userData.entity;
+    if (current?.type === "Avatar") this.handleEntity(current, true);
+    if (previousVersion) this.disposeAvatarImageVersion(id, previousVersion);
+  }
+
   disposeAvatarImageVersion(id: EntityId, version: number): void {
     const textureKey = `avatar:${JSON.stringify([id, version])}`;
     const texture = this.textures.get(textureKey);
@@ -530,6 +571,10 @@ export class VirtualRcRenderer {
     for (const component of object.userData.components || [])
       this.instanceBatches.delete(component.key);
     this.entities.delete(id);
+    const imageVersion = this.avatarImageVersions.get(id) || 0;
+    this.avatarImages.delete(id);
+    this.avatarImageVersions.delete(id);
+    if (imageVersion) this.disposeAvatarImageVersion(id, imageVersion);
   }
 
   replaceEntities(entities: EntityUpdate[]): void {
