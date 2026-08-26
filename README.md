@@ -1,17 +1,24 @@
 # VRC3D Three.js prototype
 
-A Three.js port of the rendering core from [cthulahoops/vrc3d](https://github.com/cthulahoops/vrc3d). The renderer consumes protocol-shaped entity records and preserves the original entity dimensions and placement rules. A localhost backend-for-frontend (BFF) holds the RC application credentials, maintains one shared Action Cable subscription, and relays sanitized world snapshots and entity updates to browsers. The astronomical sky ports the original NASA star map, Moon phase lighting, and atmospheric-scattering shader.
+Back in the before times, I wrote a [python 3D render of the Recurse Center virtual space](https://github.com/cthulahoops/vrc3d). Unfortunately, this was too difficult for anyone else to run, and very few others got to really enjoy it.
+
+This is a mostly vibe-port of that project to Three.js.
+
+## Prerequisites:
+
+You will need:
+
+* [A Recurse OAuth App](https://www.recurse.com/settings/apps).
+* [An RC Together App](https://www.recurse.com/settings/apps).
+
+Do not deploy this publicly without RC authentication. This republishes the private RC Together feed.
 
 ## Run
 
 ```bash
 npm install
-export RC_APP_ID=<app_id>
-export RC_APP_SECRET=<app_secret>
-export OAUTH_CLIENT_ID=<oauth_client_id>
-export OAUTH_CLIENT_SECRET=<oauth_client_secret>
-export OAUTH_REDIRECT_URI=http://localhost:5173/auth/callback
-export APP_ORIGIN=http://localhost:5173
+cp env.example .env
+#  <--- Configure environment variables.
 npm run dev
 ```
 
