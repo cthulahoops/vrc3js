@@ -211,6 +211,24 @@ kbd {
 .active .reticle {
   opacity: 1;
 }
+.coords {
+  position: fixed;
+  z-index: 3;
+  left: 25px;
+  bottom: 22px;
+  padding: 9px 13px;
+  border: 1px solid #ffffff1d;
+  border-radius: 99px;
+  background: #1018188c;
+  backdrop-filter: blur(9px);
+  color: #dfe7e3;
+  font: 12px DM Mono;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+}
+.coords:empty {
+  display: none;
+}
 .hint {
   position: fixed;
   z-index: 3;

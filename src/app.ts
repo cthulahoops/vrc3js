@@ -203,6 +203,12 @@ function updateSkybox() {
     renderer.shadowMap.needsUpdate = true;
   }
 }
+// RC Together's grid (x, y) is the scene's (x, z), one unit per cell.
+const coords = requiredElement<HTMLElement>("#coords");
+function updateCoords() {
+  const text = `x ${Math.round(camera.position.x)} · y ${Math.round(camera.position.z)}`;
+  if (coords.textContent !== text) coords.textContent = text;
+}
 function animate() {
   requestAnimationFrame(animate);
   const frameDelta = clock.getDelta();
@@ -222,6 +228,7 @@ function animate() {
       move.normalize(),
       dt * (keys.has("ShiftLeft") ? 7 : 4),
     );
+  updateCoords();
   renderer.render(scene, camera);
 }
 function animateVerification() {
