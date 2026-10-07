@@ -230,6 +230,7 @@ function animate() {
       dt * (keys.has("ShiftLeft") ? 7 : 4),
     );
   updateCoords();
+  world.updateNoteDetail(camera.position);
   renderer.render(scene, camera);
 }
 function animateVerification() {
@@ -266,6 +267,7 @@ if (verificationMode) {
         camera.rotation.set(fixturePitch, fixtureYaw, roll, "YXZ");
         camera.fov = fixture.camera.fov ?? 62;
         camera.updateProjectionMatrix();
+        world.updateNoteDetail(camera.position, Infinity);
         skybox.update(fixture.time, true);
         renderer.shadowMap.needsUpdate = true;
         verificationHasFixture = true;
