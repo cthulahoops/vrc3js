@@ -8,8 +8,8 @@ This is a mostly vibe-port of that project to Three.js.
 
 You will need:
 
-* [A Recurse OAuth App](https://www.recurse.com/settings/apps).
-* [An RC Together App](https://www.recurse.com/settings/apps).
+- [A Recurse OAuth App](https://www.recurse.com/settings/apps).
+- [An RC Together App](https://www.recurse.com/settings/apps).
 
 Do not deploy this publicly without RC authentication. This republishes the private RC Together feed.
 
