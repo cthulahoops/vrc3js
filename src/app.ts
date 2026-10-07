@@ -40,7 +40,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.12;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 100);
-camera.position.set(5.5, 0.6, 11);
+camera.position.set(73, 0.6, 47);
 scene.add(new THREE.HemisphereLight("#d8ece7", "#6a7770", 2.2));
 const sun = new THREE.DirectionalLight("#fff4da", 3);
 sun.position.set(-8, 14, 8);
@@ -142,7 +142,8 @@ const streamHandlers = {
 if (verificationMode) setConnectionStatus("verification");
 else connectWorldStream(streamHandlers);
 
-let yaw = 0,
+// Spawn facing east (+x on the RC grid).
+let yaw = -Math.PI / 2,
   pitch = -0.04,
   active = false;
 const keys = new Set();
