@@ -14,6 +14,7 @@ import { buildWorld, loadWorldAssets } from "./world.js";
 import { Skybox } from "./skybox.js";
 import { parseVerificationFixture } from "./verification.js";
 import { requiredElement, setConnectionStatus } from "./dom.js";
+import { showLogin } from "./session.js";
 
 declare global {
   interface Window {
@@ -132,6 +133,11 @@ const streamHandlers = {
     if (screenshotMode) renderScreenshot();
   },
   onStatus: setConnectionStatus,
+  onSignedOut() {
+    document.exitPointerLock();
+    showLogin("Your session has ended. Log in again to continue.");
+    setConnectionStatus("unauthenticated");
+  },
 } satisfies Parameters<typeof connectWorldStream>[0];
 if (verificationMode) setConnectionStatus("verification");
 else connectWorldStream(streamHandlers);

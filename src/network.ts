@@ -2,6 +2,7 @@ const reconnectMinimumMs = 500;
 const reconnectMaximumMs = 10_000;
 
 import type { EntityUpdate } from "../server/protocol.js";
+import { hasSession } from "./session.js";
 
 export type ConnectionStatus =
   | "connected"
@@ -15,6 +16,7 @@ export interface WorldStreamHandlers {
   onSnapshot(entities: EntityUpdate[]): void;
   onEntity(entity: EntityUpdate): void;
   onStatus(status: ConnectionStatus): void;
+  onSignedOut(): void;
 }
 
 interface StreamMessage {
@@ -28,18 +30,42 @@ export function connectWorldStream({
   onSnapshot,
   onEntity,
   onStatus,
+  onSignedOut,
 }: WorldStreamHandlers): () => void {
   let socket: WebSocket | undefined;
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   let reconnectDelay = reconnectMinimumMs;
   let stopped = false;
 
+  function scheduleReconnect() {
+    reconnectTimer = setTimeout(connect, reconnectDelay);
+    reconnectDelay = Math.min(reconnectDelay * 2, reconnectMaximumMs);
+  }
+
+  // Browsers hide the HTTP status of a refused WebSocket upgrade, so an
+  // expired session looks like any other failed connection. Ask directly
+  // before retrying, otherwise we'd retry a 401 forever.
+  async function reconnectUnlessSignedOut() {
+    try {
+      if (!(await hasSession())) {
+        stopped = true;
+        onSignedOut();
+        return;
+      }
+    } catch {
+      // Server unreachable; keep retrying.
+    }
+    if (!stopped) scheduleReconnect();
+  }
+
   function connect() {
+    let opened = false;
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
     socket = new WebSocket(`${protocol}//${location.host}/api/world`);
     onStatus("connecting");
 
     socket.addEventListener("open", () => {
+      opened = true;
       reconnectDelay = reconnectMinimumMs;
     });
     socket.addEventListener("message", (event) => {
@@ -61,8 +87,8 @@ export function connectWorldStream({
     socket.addEventListener("close", () => {
       if (stopped) return;
       onStatus("disconnected");
-      reconnectTimer = setTimeout(connect, reconnectDelay);
-      reconnectDelay = Math.min(reconnectDelay * 2, reconnectMaximumMs);
+      if (opened) scheduleReconnect();
+      else void reconnectUnlessSignedOut();
     });
     socket.addEventListener("error", () => socket?.close());
   }

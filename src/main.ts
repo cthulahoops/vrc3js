@@ -4,32 +4,16 @@ import "@fontsource/manrope/latin-700.css";
 import "@fontsource/dm-mono/latin-400.css";
 import "@fontsource/dm-mono/latin-500.css";
 import { requiredElement, setConnectionStatus } from "./dom.js";
+import { hasSession, showLogin } from "./session.js";
 import "./style.css";
 
 const query = new URLSearchParams(location.search);
 const login = requiredElement<HTMLElement>("#login");
-const loginLink = requiredElement<HTMLAnchorElement>("#login-link");
-const authStatus = requiredElement<HTMLElement>("#auth-status");
 const welcome = requiredElement<HTMLElement>("#welcome");
-
-interface SessionResponse {
-  authenticated?: unknown;
-}
-
-function showLogin(message = "") {
-  loginLink.hidden = false;
-  authStatus.textContent = message;
-}
 
 async function checkSession(): Promise<boolean> {
   try {
-    const response = await fetch("/api/session", {
-      headers: { accept: "application/json" },
-    });
-    const session = response.ok
-      ? ((await response.json()) as SessionResponse)
-      : null;
-    if (session?.authenticated) return true;
+    if (await hasSession()) return true;
     showLogin("Recursers Only");
     setConnectionStatus("unauthenticated");
   } catch {
