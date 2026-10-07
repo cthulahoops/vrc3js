@@ -1,6 +1,7 @@
 import { decodeActionCableMessage } from "./protocol.js";
 import type { EntityUpdate } from "./protocol.js";
 import { randomBytes, timingSafeEqual } from "node:crypto";
+import { relative, resolve, sep } from "node:path";
 import {
   createSession,
   sessionMaxAgeSeconds,
@@ -255,6 +256,35 @@ function connectUpstream() {
   connectedSocket.onclose = scheduleReconnect;
 }
 
+// In production the BFF also serves the Vite build; in development Vite does.
+const staticDir = Bun.env.STATIC_DIR ? resolve(Bun.env.STATIC_DIR) : undefined;
+
+async function serveStatic(request: Request): Promise<Response | undefined> {
+  if (!staticDir || !["GET", "HEAD"].includes(request.method)) return;
+
+  let pathname: string;
+  try {
+    pathname = decodeURIComponent(new URL(request.url).pathname);
+  } catch {
+    return;
+  }
+  if (pathname.includes("\0")) return;
+  if (pathname.endsWith("/")) pathname += "index.html";
+
+  const filePath = resolve(staticDir, `.${pathname}`);
+  const relativePath = relative(staticDir, filePath);
+  if (relativePath.startsWith(`..${sep}`) || relativePath === "..") return;
+
+  const file = Bun.file(filePath);
+  if (!(await file.exists())) return;
+
+  // Vite fingerprints everything under assets/, so it never changes in place.
+  const cacheControl = relativePath.startsWith(`assets${sep}`)
+    ? "public, max-age=31536000, immutable"
+    : "no-cache";
+  return new Response(file, { headers: { "cache-control": cacheControl } });
+}
+
 const server = Bun.serve({
   hostname: Bun.env.BFF_HOST ?? "localhost",
   port: Number(Bun.env.BFF_PORT ?? 8787),
@@ -415,7 +445,10 @@ const server = Bun.serve({
     },
   },
 
-  fetch() {
+  async fetch(request) {
+    const staticResponse = await serveStatic(request);
+    if (staticResponse) return staticResponse;
+
     return new Response("Not found", {
       status: 404,
       headers: { "content-type": "text/plain" },
