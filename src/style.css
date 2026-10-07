@@ -155,24 +155,13 @@ body,
   visibility: hidden;
   pointer-events: none;
 }
-.welcome h1 {
-  margin: 12px 0 6px;
-  font-size: clamp(42px, 7vw, 78px);
-  line-height: 1;
-  letter-spacing: -0.055em;
-}
-.welcome p {
-  color: #aeb9b4;
-  font-size: 14px;
-}
 .welcome button {
-  margin-top: 21px;
-  padding: 14px 20px;
+  padding: 18px 28px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 8px;
   background: #ecf0e9;
   color: #13201d;
-  font: 600 12px Manrope;
+  font: 700 17px Manrope;
   cursor: pointer;
 }
 .welcome button span {
@@ -205,11 +194,11 @@ body,
   justify-content: space-between;
   align-items: center;
   margin-top: 28px;
-  padding: 15px 17px;
+  padding: 18px 22px;
   border-radius: 8px;
   background: #ecf0e9;
   color: #13201d;
-  font-size: 12px;
+  font-size: 17px;
   font-weight: 700;
   text-decoration: none;
   transition:
@@ -239,22 +228,22 @@ body,
 }
 .controls {
   display: flex;
-  gap: 25px;
-  margin-top: 22px;
-  color: #778882;
-  font: 9px DM Mono;
+  gap: 32px;
+  margin-top: 28px;
+  color: #a3b2ac;
+  font: 14px DM Mono;
   text-transform: uppercase;
 }
 .controls span {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 10px;
 }
 kbd {
-  padding: 3px 5px;
-  border: 1px solid #ffffff28;
-  border-radius: 4px;
-  color: #aab7b2;
+  padding: 4px 8px;
+  border: 1px solid #ffffff40;
+  border-radius: 5px;
+  color: #dfe7e3;
   font: inherit;
 }
 .reticle {
