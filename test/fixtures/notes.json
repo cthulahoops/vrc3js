@@ -1,0 +1,442 @@
+{
+  "entities": [
+    {
+      "id": "note-0",
+      "type": "Note",
+      "pos": {
+        "x": 0,
+        "y": 0
+      },
+      "note_text": "Back in 5 min"
+    },
+    {
+      "id": "note-1",
+      "type": "Note",
+      "pos": {
+        "x": 2,
+        "y": 0
+      },
+      "note_text": "Pairing station 🙂🍕\nGrab a seat!"
+    },
+    {
+      "id": "note-2",
+      "type": "Note",
+      "pos": {
+        "x": 4,
+        "y": 0
+      },
+      "note_text": "Lunch talk today at 12:30 in the Lovelace room. Bring your own sandwich."
+    },
+    {
+      "id": "note-3",
+      "type": "Note",
+      "pos": {
+        "x": 6,
+        "y": 0
+      },
+      "note_text": "Presentations sign-up:\n\n1. Ada — Rust async runtimes\n2. Grace — Building a Lisp in a weekend\n3. Alan — Fun with SAT solvers\n4. (your name here)"
+    },
+    {
+      "id": "note-4",
+      "type": "Note",
+      "pos": {
+        "x": 8,
+        "y": 0
+      },
+      "note_text": "Things I learned this week:\n\n- Three.js InstancedMesh is fast as long as you don't make a new material per instance.\n- Canvas text needs fonts to be loaded explicitly before drawing, otherwise you silently get the fallback font.\n- Binary search is still the answer to most layout problems.\n\nAsk me about any of these!"
+    },
+    {
+      "id": "note-5",
+      "type": "Note",
+      "pos": {
+        "x": 10,
+        "y": 0
+      },
+      "note_text": "Welcome to the virtual RC space! This is a place to hang out, pair, and work on things that are interesting to you.\n\nA few tips: Walk up to a desk to claim it for the day. Audio rooms let you talk to whoever is standing inside them. Notes like this one can be edited by anyone, so please leave something kind or useful.\n\nIf you get lost, the welcome desk is to the north of the kitchen. If you are feeling stuck on a project, the check-in channel is a great place to ask for a pairing partner. Remember the self-directives: work at the edge of your abilities, build your volitional muscles, and learn generously.\n\nHave a great batch!"
+    },
+    {
+      "id": "note-6",
+      "type": "Note",
+      "pos": {
+        "x": 12,
+        "y": 0
+      },
+      "note_text": "TODO: water the plants"
+    },
+    {
+      "id": "note-7",
+      "type": "Note",
+      "pos": {
+        "x": 14,
+        "y": 0
+      },
+      "note_text": "Lost: one semicolon. Last seen near line 42. Reward offered."
+    },
+    {
+      "id": "note-8",
+      "type": "Note",
+      "pos": {
+        "x": 16,
+        "y": 0
+      },
+      "note_text": ""
+    },
+    {
+      "id": "note-9",
+      "type": "Note",
+      "pos": {
+        "x": 18,
+        "y": 0
+      },
+      "note_text": "Coffee chat roulette — add your name:\nAdam, Sam, Priya, Jo, Mei, Tomasz, Lin"
+    },
+    {
+      "id": "back--3",
+      "type": "Wall",
+      "pos": {
+        "x": -3,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back--2",
+      "type": "Wall",
+      "pos": {
+        "x": -2,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back--1",
+      "type": "Wall",
+      "pos": {
+        "x": -1,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-0",
+      "type": "Wall",
+      "pos": {
+        "x": 0,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "wall-1",
+      "type": "Wall",
+      "pos": {
+        "x": 1,
+        "y": 0
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-1",
+      "type": "Wall",
+      "pos": {
+        "x": 1,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-2",
+      "type": "Wall",
+      "pos": {
+        "x": 2,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "wall-3",
+      "type": "Wall",
+      "pos": {
+        "x": 3,
+        "y": 0
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-3",
+      "type": "Wall",
+      "pos": {
+        "x": 3,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-4",
+      "type": "Wall",
+      "pos": {
+        "x": 4,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "wall-5",
+      "type": "Wall",
+      "pos": {
+        "x": 5,
+        "y": 0
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-5",
+      "type": "Wall",
+      "pos": {
+        "x": 5,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-6",
+      "type": "Wall",
+      "pos": {
+        "x": 6,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "wall-7",
+      "type": "Wall",
+      "pos": {
+        "x": 7,
+        "y": 0
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-7",
+      "type": "Wall",
+      "pos": {
+        "x": 7,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-8",
+      "type": "Wall",
+      "pos": {
+        "x": 8,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "wall-9",
+      "type": "Wall",
+      "pos": {
+        "x": 9,
+        "y": 0
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-9",
+      "type": "Wall",
+      "pos": {
+        "x": 9,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-10",
+      "type": "Wall",
+      "pos": {
+        "x": 10,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "wall-11",
+      "type": "Wall",
+      "pos": {
+        "x": 11,
+        "y": 0
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-11",
+      "type": "Wall",
+      "pos": {
+        "x": 11,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-12",
+      "type": "Wall",
+      "pos": {
+        "x": 12,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "wall-13",
+      "type": "Wall",
+      "pos": {
+        "x": 13,
+        "y": 0
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-13",
+      "type": "Wall",
+      "pos": {
+        "x": 13,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-14",
+      "type": "Wall",
+      "pos": {
+        "x": 14,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "wall-15",
+      "type": "Wall",
+      "pos": {
+        "x": 15,
+        "y": 0
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-15",
+      "type": "Wall",
+      "pos": {
+        "x": 15,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-16",
+      "type": "Wall",
+      "pos": {
+        "x": 16,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "wall-17",
+      "type": "Wall",
+      "pos": {
+        "x": 17,
+        "y": 0
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-17",
+      "type": "Wall",
+      "pos": {
+        "x": 17,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-18",
+      "type": "Wall",
+      "pos": {
+        "x": 18,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-19",
+      "type": "Wall",
+      "pos": {
+        "x": 19,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-20",
+      "type": "Wall",
+      "pos": {
+        "x": 20,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "back-21",
+      "type": "Wall",
+      "pos": {
+        "x": 21,
+        "y": -3
+      },
+      "color": "gray"
+    },
+    {
+      "id": "desk-1",
+      "type": "Desk",
+      "pos": {
+        "x": 3,
+        "y": 3
+      }
+    },
+    {
+      "id": "avatar-1",
+      "type": "Avatar",
+      "pos": {
+        "x": 5,
+        "y": 3
+      },
+      "name": "Ada Lovelace",
+      "initials": "AL",
+      "photo_color": "#d7b18a"
+    },
+    {
+      "id": "note-free",
+      "type": "Note",
+      "pos": {
+        "x": 8,
+        "y": 4
+      },
+      "note_text": "Free-standing note: read me from any side!"
+    }
+  ],
+  "camera": {
+    "position": {
+      "x": 7,
+      "y": 0.9,
+      "z": 2.1
+    },
+    "orientation": {
+      "yaw": 0,
+      "pitch": -0.12,
+      "roll": 0
+    },
+    "fov": 62
+  },
+  "time": "2021-06-20T16:00:00Z"
+}

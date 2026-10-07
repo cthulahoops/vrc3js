@@ -56,15 +56,24 @@ export interface AudioRoomEntity extends EntityBase {
   width: number;
   height: number;
 }
+export interface NoteEntity extends EntityBase {
+  type: "Note";
+  note_text?: string;
+}
 type SimpleEntityType = Exclude<
   EntityType,
-  "Wall" | "Avatar" | "Bot" | "AudioRoom"
+  "Wall" | "Avatar" | "Bot" | "AudioRoom" | "Note"
 >;
 export type SimpleEntity = {
   [Type in SimpleEntityType]: EntityBase & { type: Type };
 }[SimpleEntityType];
 export type WorldEntity =
-  WallEntity | AvatarEntity | BotEntity | AudioRoomEntity | SimpleEntity;
+  | WallEntity
+  | AvatarEntity
+  | BotEntity
+  | AudioRoomEntity
+  | NoteEntity
+  | SimpleEntity;
 export type DeletedEntity = { id: EntityId; type: EntityType; deleted: true };
 export type EntityUpdate = WorldEntity | DeletedEntity;
 
@@ -192,6 +201,10 @@ export function sanitizeEntity(
     )
       return null;
     return { id, type, pos, width: value.width, height: value.height };
+  }
+  if (type === "Note") {
+    const noteText = limitedString(value.note_text, 4_000);
+    return { id, type, pos, ...(noteText ? { note_text: noteText } : {}) };
   }
   return { id, type, pos } as SimpleEntity;
 }

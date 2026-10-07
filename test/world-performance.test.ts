@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import type { WallEntity } from "../server/protocol.js";
+import type { NoteEntity, WallEntity } from "../server/protocol.js";
 import type { InstanceBatch } from "../src/instanceBatches.js";
 import type {
   EntityHandle,
@@ -29,6 +29,17 @@ if (!globalThis.document)
               fillRect() {},
               fillText() {},
               drawImage() {},
+              beginPath() {},
+              moveTo() {},
+              lineTo() {},
+              fill() {},
+              stroke() {},
+              measureText(text: string) {
+                return { width: text.length * 10 };
+              },
+              createLinearGradient() {
+                return { addColorStop() {} };
+              },
             };
           },
         };
@@ -275,7 +286,7 @@ test("different cube dimensions share a material batch through matrix scaling", 
   assert.equal(batch.size, 2);
 });
 
-test("fixture world batches its nineteen cube components into thirteen draws", () => {
+test("fixture world batches its twenty-three cube components into thirteen draws", () => {
   const { scene, renderer } = makeRenderer();
   renderer.replaceEntities(FIXTURE_WORLD);
 
@@ -283,11 +294,81 @@ test("fixture world batches its nineteen cube components into thirteen draws", (
     (total, handle) => total + (handle.userData.components?.length ?? 0),
     0,
   );
-  assert.equal(componentCount, 19);
+  assert.equal(componentCount, 23);
   assert.equal(renderer.instanceBatches.batches.size, 13);
   assert.equal(
     scene.children.filter((child) => child instanceof THREE.InstancedMesh)
       .length,
     13,
   );
+});
+
+function note(id: string, x: number, note_text?: string): NoteEntity {
+  return {
+    id,
+    type: "Note",
+    pos: { x, y: 0 },
+    ...(note_text ? { note_text } : {}),
+  };
+}
+
+function postItMaterial(renderer: VirtualRcRendererType, id: string) {
+  return renderer.entities.get(id)!.userData.components![1]!.material;
+}
+
+test("distant notes share one post-it material", () => {
+  const { renderer } = makeRenderer();
+  renderer.replaceEntities([note("a", 0, "Hello"), note("b", 2, "World")]);
+  renderer.updateNoteDetail(new THREE.Vector3(100, 1, 100));
+  assert.equal(renderer.noteDetails.size, 0);
+  assert.strictEqual(
+    postItMaterial(renderer, "a"),
+    postItMaterial(renderer, "b"),
+  );
+});
+
+test("nearby notes get their own text texture until the viewer leaves", () => {
+  const { renderer } = makeRenderer();
+  renderer.replaceEntities([note("a", 0, "Hello"), note("b", 30, "World")]);
+  const shared = postItMaterial(renderer, "a");
+
+  renderer.updateNoteDetail(new THREE.Vector3(0, 1, 2));
+  assert.deepEqual([...renderer.noteDetails.keys()], ["a"]);
+  const detail = renderer.noteDetails.get("a")!;
+  assert.strictEqual(postItMaterial(renderer, "a"), detail.material);
+
+  // Inside the release distance the texture is kept to avoid flicker.
+  renderer.updateNoteDetail(new THREE.Vector3(0, 1, 7));
+  assert.strictEqual(renderer.noteDetails.get("a"), detail);
+
+  renderer.updateNoteDetail(new THREE.Vector3(0, 1, 20));
+  assert.equal(renderer.noteDetails.size, 0);
+  assert.strictEqual(postItMaterial(renderer, "a"), shared);
+});
+
+test("note detail creation is budgeted and skips empty notes", () => {
+  const { renderer } = makeRenderer();
+  renderer.replaceEntities([
+    note("empty", 0),
+    note("a", 1, "A"),
+    note("b", 2, "B"),
+    note("c", 3, "C"),
+  ]);
+  renderer.updateNoteDetail(new THREE.Vector3(0, 1, 0), 2);
+  assert.deepEqual([...renderer.noteDetails.keys()], ["a", "b"]);
+  renderer.updateNoteDetail(new THREE.Vector3(0, 1, 0), 2);
+  assert.deepEqual([...renderer.noteDetails.keys()], ["a", "b", "c"]);
+});
+
+test("editing or deleting a note drops its stale text texture", () => {
+  const { renderer } = makeRenderer();
+  renderer.replaceEntities([note("a", 0, "Before")]);
+  renderer.updateNoteDetail(new THREE.Vector3(0, 1, 0));
+  renderer.handleEntity(note("a", 0, "After"));
+  assert.equal(renderer.noteDetails.size, 0);
+  renderer.updateNoteDetail(new THREE.Vector3(0, 1, 0));
+  assert.equal(renderer.noteDetails.get("a")?.text, "After");
+  renderer.handleEntity({ id: "a", type: "Note", deleted: true });
+  assert.equal(renderer.noteDetails.size, 0);
+  assert.equal(renderer.notes.size, 0);
 });

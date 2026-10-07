@@ -82,3 +82,23 @@ test("rejects malformed positions and dimensions", () => {
     null,
   );
 });
+
+test("keeps note text and bounds its length", () => {
+  assert.deepEqual(
+    sanitizeEntity({
+      id: "note-1",
+      type: "Note",
+      pos: { x: 1, y: 2 },
+      note_text: "Back in 5",
+      updated_by: { name: "Ada" },
+    }),
+    { id: "note-1", type: "Note", pos: { x: 1, y: 2 }, note_text: "Back in 5" },
+  );
+  const long = sanitizeEntity({
+    id: "note-2",
+    type: "Note",
+    pos: { x: 0, y: 0 },
+    note_text: "x".repeat(10_000),
+  });
+  assert.equal(long && "note_text" in long && long.note_text?.length, 4_000);
+});

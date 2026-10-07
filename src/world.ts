@@ -1,12 +1,14 @@
 import * as THREE from "three";
 import { ORIGINAL_TEXTURES } from "./originalTextures.js";
 import { InstanceBatchRegistry } from "./instanceBatches.js";
+import { fitNoteText } from "./noteText.js";
 import type {
   AvatarEntity,
   EntityColor,
   EntityId,
   EntityUpdate,
   EntityType,
+  NoteEntity,
   WorldEntity,
 } from "../server/protocol.js";
 
@@ -28,6 +30,7 @@ interface RenderComponent {
   offset: THREE.Vector3;
   material: THREE.MeshStandardMaterial;
   color: THREE.Color | null;
+  castShadow?: boolean;
 }
 export interface RetainedComponent extends RenderComponent {
   key: object;
@@ -56,15 +59,28 @@ export const COLORS: Record<EntityColor, string> = {
   yellow: "#e7dd6f",
 };
 
-type IconType = Exclude<EntityType, "Wall" | "Desk" | "Avatar" | "Bot">;
+type IconType = Exclude<
+  EntityType,
+  "Wall" | "Desk" | "Avatar" | "Bot" | "Note"
+>;
 const ICONS: Record<IconType, readonly [string, string]> = {
   ZoomLink: ["↗", "#2472d9"],
   Link: ["↗", "#eeeeee"],
-  Note: ["✎", COLORS.yellow],
   AudioBlock: ["♪", "#eeeeee"],
   "RC::Calendar": ["31", "#eeeeee"],
   AudioRoom: ["●", "#eeeeee"],
 };
+
+const POST_IT_COLOR = "#fbe56b";
+const POST_IT_INK = "#2a2d36";
+const POST_IT_FONT = "Manrope, sans-serif";
+const POST_IT_SIZE = 0.84;
+const POST_IT_THICKNESS = 0.012;
+// Text is drawn only for nearby notes. The wider release distance stops notes
+// on the boundary from rebuilding their texture every frame.
+const NOTE_DETAIL_DISTANCE = 6;
+const NOTE_DETAIL_RELEASE_DISTANCE = 8;
+const MAX_DETAILED_NOTES = 16;
 
 let loadedAssets: Record<string, ImageAsset> = {};
 let emojiSprites = new Map<string, EmojiSprite>();
@@ -122,6 +138,8 @@ export async function loadWorldAssets() {
     }),
     loadImage(EMOJI_SHEET_URL, true),
   ]);
+  // Canvas text does not trigger web font loading, so load the note face first.
+  await document.fonts.load(`600 32px ${POST_IT_FONT}`);
   loadedAssets = { ...Object.fromEntries(assets), emojiSheet };
   emojiSprites = indexEmojiSprites(emojiData);
 }
@@ -178,15 +196,84 @@ function faceTexture(
   });
 }
 
+function emojiSprite(symbol: string): EmojiSprite | undefined {
+  const unified = [...symbol]
+    .map((character) => character.codePointAt(0)!.toString(16).toUpperCase())
+    .join("-");
+  return emojiSprites.get(unified);
+}
+
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+type TextRun = string | EmojiSprite;
+
+/** Split text so emoji can be drawn from the sprite sheet between text runs. */
+function textRuns(text: string): TextRun[] {
+  const runs: TextRun[] = [];
+  for (const { segment } of graphemes.segment(text)) {
+    const sprite = /\p{Emoji_Presentation}|\uFE0F/u.test(segment)
+      ? emojiSprite(segment)
+      : undefined;
+    const previous = runs[runs.length - 1];
+    if (sprite) runs.push(sprite);
+    else if (typeof previous === "string") runs[runs.length - 1] += segment;
+    else runs.push(segment);
+  }
+  return runs;
+}
+
+const EMOJI_ADVANCE = 1.15;
+
+function measureRuns(
+  context: CanvasRenderingContext2D,
+  text: string,
+  fontSize: number,
+): number {
+  context.font = `600 ${fontSize}px ${POST_IT_FONT}`;
+  return textRuns(text).reduce(
+    (width, run) =>
+      width +
+      (typeof run === "string"
+        ? context.measureText(run).width
+        : fontSize * EMOJI_ADVANCE),
+    0,
+  );
+}
+
+function drawRuns(
+  context: CanvasRenderingContext2D,
+  text: string,
+  fontSize: number,
+  x: number,
+  y: number,
+): void {
+  for (const run of textRuns(text)) {
+    if (typeof run === "string") {
+      context.fillText(run, x, y);
+      x += context.measureText(run).width;
+      continue;
+    }
+    const inset = fontSize * (EMOJI_ADVANCE - 1) * 0.5;
+    context.drawImage(
+      loadedAssets.emojiSheet!,
+      run.x,
+      run.y,
+      EMOJI_SIZE,
+      EMOJI_SIZE,
+      x + inset,
+      y,
+      fontSize,
+      fontSize,
+    );
+    x += fontSize * EMOJI_ADVANCE;
+  }
+}
+
 function glyphTexture(
   symbol: string,
   background: string,
   foreground = "#16201e",
 ): THREE.CanvasTexture {
-  const unified = [...symbol]
-    .map((character) => character.codePointAt(0)!.toString(16).toUpperCase())
-    .join("-");
-  const sprite = emojiSprites.get(unified);
+  const sprite = emojiSprite(symbol);
   if (sprite)
     return canvasTexture((context, canvas) => {
       context.fillStyle = background;
@@ -231,7 +318,6 @@ function iconTexture(
   const assetName: Record<IconType, string> = {
     ZoomLink: "zoom",
     Link: "link",
-    Note: "note",
     AudioBlock: "audio_block",
     "RC::Calendar": "calendar",
     AudioRoom: "microphone",
@@ -243,6 +329,88 @@ function iconTexture(
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(asset, 0, 0, canvas.width, canvas.height);
   });
+}
+
+/**
+ * A post-it with its bottom-right corner peeled up. `text` null draws the
+ * distant placeholder; `scribble` hints that a distant note has content.
+ */
+function postItTexture(
+  text: string | null,
+  scribble = false,
+): THREE.CanvasTexture {
+  const size = text && text.length > 240 ? 1024 : 512;
+  return canvasTexture(
+    (context, canvas) => {
+      const s = canvas.width;
+      const fold = s * 0.14;
+      context.fillStyle = POST_IT_COLOR;
+      context.fillRect(0, 0, s, s);
+      // The adhesive strip is slightly darker, as on a real pad.
+      context.fillStyle = "rgba(170, 130, 0, 0.1)";
+      context.fillRect(0, 0, s, s * 0.06);
+      const shade = context.createLinearGradient(0, 0, 0, s);
+      shade.addColorStop(0, "rgba(255, 255, 255, 0.12)");
+      shade.addColorStop(1, "rgba(160, 120, 0, 0.12)");
+      context.fillStyle = shade;
+      context.fillRect(0, 0, s, s);
+      // The block shows through where the corner has curled away.
+      context.fillStyle = COLORS.gray;
+      context.beginPath();
+      context.moveTo(s - fold, s);
+      context.lineTo(s, s - fold);
+      context.lineTo(s, s);
+      context.fill();
+      context.fillStyle = "#d9bf3c";
+      context.beginPath();
+      context.moveTo(s - fold, s);
+      context.lineTo(s, s - fold);
+      context.lineTo(s - fold * 0.92, s - fold * 0.92);
+      context.fill();
+
+      if (scribble) {
+        context.strokeStyle = "rgba(42, 45, 54, 0.32)";
+        context.lineWidth = s * 0.022;
+        context.lineCap = "round";
+        [0.62, 0.48, 0.7, 0.35].forEach((width, row) => {
+          const y = s * (0.24 + row * 0.13);
+          context.beginPath();
+          context.moveTo(s * 0.14, y);
+          context.lineTo(s * (0.14 + width), y);
+          context.stroke();
+        });
+      }
+      if (!text) return;
+
+      const left = s * 0.08;
+      const top = s * 0.09;
+      const layout = fitNoteText(
+        (line, fontSize) => measureRuns(context, line, fontSize),
+        text,
+        {
+          width: s - left * 2,
+          height: s - top - s * 0.15,
+          minFontSize: Math.round(s * 0.022),
+          maxFontSize: Math.round(s * 0.16),
+        },
+      );
+      context.font = `600 ${layout.fontSize}px ${POST_IT_FONT}`;
+      context.fillStyle = POST_IT_INK;
+      context.textAlign = "left";
+      context.textBaseline = "top";
+      layout.lines.forEach((line, index) =>
+        drawRuns(
+          context,
+          line,
+          layout.fontSize,
+          left,
+          top + index * layout.lineHeight,
+        ),
+      );
+    },
+    null,
+    { width: size, height: size },
+  );
 }
 
 function avatarTexture(
@@ -318,6 +486,12 @@ function valuesEqual(
   );
 }
 
+interface NoteDetail {
+  text: string;
+  texture: THREE.CanvasTexture;
+  material: THREE.MeshStandardMaterial;
+}
+
 export class VirtualRcRenderer {
   static readonly scratchMatrix = new THREE.Matrix4();
   static readonly scratchPosition = new THREE.Vector3();
@@ -330,6 +504,10 @@ export class VirtualRcRenderer {
   readonly geometries = new Map<string, THREE.BoxGeometry>();
   readonly materials = new Map<string, THREE.MeshStandardMaterial>();
   readonly textures = new Map<string, THREE.Texture>();
+  readonly notes = new Set<EntityId>();
+  // Detailed note textures are unique per note, so they live outside the
+  // shared caches and are disposed as soon as the viewer walks away.
+  readonly noteDetails = new Map<EntityId, NoteDetail>();
   readonly instanceBatches: InstanceBatchRegistry;
   readonly instanceGeometry: THREE.BoxGeometry;
   readonly instanceColorMaterial: THREE.MeshStandardMaterial;
@@ -473,7 +651,8 @@ export class VirtualRcRenderer {
 
   updateEntityMatrices(handle: EntityHandle): void {
     for (const component of handle.userData.components || []) {
-      const bucketKey = `${this.instanceGeometry.uuid}:${component.material.uuid}:shadow`;
+      const castShadow = component.castShadow ?? true;
+      const bucketKey = `${this.instanceGeometry.uuid}:${component.material.uuid}:${castShadow ? "shadow" : "flat"}`;
       this.instanceBatches.set(component.key, {
         bucketKey,
         geometry: this.instanceGeometry,
@@ -483,7 +662,7 @@ export class VirtualRcRenderer {
           component,
           VirtualRcRenderer.scratchMatrix,
         ),
-        castShadow: true,
+        castShadow,
         receiveShadow: true,
         color: component.color,
       });
@@ -563,6 +742,63 @@ export class VirtualRcRenderer {
     rendered.userData.entity = structuredClone(entity);
     this.setEntityComponents(rendered, components);
     this.entities.set(entity.id, rendered);
+    if (entity.type === "Note") this.notes.add(entity.id);
+    else {
+      this.notes.delete(entity.id);
+      this.disposeNoteDetail(entity.id);
+    }
+  }
+
+  disposeNoteDetail(id: EntityId): void {
+    const detail = this.noteDetails.get(id);
+    if (!detail) return;
+    detail.material.dispose();
+    detail.texture.dispose();
+    this.noteDetails.delete(id);
+  }
+
+  /**
+   * Draw text on the notes nearest the viewer and return the rest to the shared
+   * placeholder. `creationBudget` caps how many textures are drawn per call so
+   * walking into a crowd of notes does not stall a frame.
+   */
+  updateNoteDetail(viewer: THREE.Vector3, creationBudget = 2): void {
+    const nearby: { id: EntityId; distance: number }[] = [];
+    for (const id of this.notes) {
+      const handle = this.entities.get(id)!;
+      if (!(handle.userData.entity as NoteEntity).note_text) continue;
+      const distance = Math.hypot(
+        handle.position.x - viewer.x,
+        handle.position.z - viewer.z,
+      );
+      const limit = this.noteDetails.has(id)
+        ? NOTE_DETAIL_RELEASE_DISTANCE
+        : NOTE_DETAIL_DISTANCE;
+      if (distance <= limit) nearby.push({ id, distance });
+    }
+    nearby.sort((left, right) => left.distance - right.distance);
+    const wanted = new Set(
+      nearby.slice(0, MAX_DETAILED_NOTES).map(({ id }) => id),
+    );
+    for (const [id, detail] of [...this.noteDetails]) {
+      if (wanted.has(id)) continue;
+      this.noteDetails.delete(id);
+      this.handleEntity(this.entities.get(id)!.userData.entity!, true);
+      detail.material.dispose();
+      detail.texture.dispose();
+    }
+    for (const id of wanted) {
+      if (this.noteDetails.has(id)) continue;
+      if (creationBudget-- <= 0) break;
+      const entity = this.entities.get(id)!.userData.entity as NoteEntity;
+      const texture = postItTexture(entity.note_text!);
+      this.noteDetails.set(id, {
+        text: entity.note_text!,
+        texture,
+        material: material(POST_IT_COLOR, texture),
+      });
+      this.handleEntity(entity, true);
+    }
   }
 
   deleteEntity(id: EntityId): void {
@@ -571,6 +807,8 @@ export class VirtualRcRenderer {
     for (const component of object.userData.components || [])
       this.instanceBatches.delete(component.key);
     this.entities.delete(id);
+    this.notes.delete(id);
+    this.disposeNoteDetail(id);
     const imageVersion = this.avatarImageVersions.get(id) || 0;
     this.avatarImages.delete(id);
     this.avatarImageVersions.delete(id);
@@ -666,13 +904,44 @@ export class VirtualRcRenderer {
         ),
       );
     } else if (entity.type === "Note") {
-      components.push(
-        this.cube(
-          new THREE.Vector3(1, 1, 1),
-          COLORS.yellow,
-          this.cachedIconTexture(entity.type),
-        ),
+      components.push(this.cube(new THREE.Vector3(1, 1, 1), COLORS.gray));
+      if (this.noteDetails.get(entity.id)?.text !== entity.note_text)
+        this.disposeNoteDetail(entity.id);
+      const postItMaterial =
+        this.noteDetails.get(entity.id)?.material ??
+        this.cachedMaterial(
+          POST_IT_COLOR,
+          this.texture(
+            `post-it:${entity.note_text ? "scribble" : "blank"}`,
+            () => postItTexture(null, !!entity.note_text),
+          ),
+        );
+      const lift = (1 - POST_IT_SIZE) / 2;
+      const out = 0.5 + POST_IT_THICKNESS / 2;
+      const across = new THREE.Vector3(
+        POST_IT_SIZE,
+        POST_IT_SIZE,
+        POST_IT_THICKNESS,
       );
+      const along = new THREE.Vector3(
+        POST_IT_THICKNESS,
+        POST_IT_SIZE,
+        POST_IT_SIZE,
+      );
+      for (const [size, x, z] of [
+        [across, 0, out],
+        [across, 0, -out],
+        [along, out, 0],
+        [along, -out, 0],
+      ] as const)
+        components.push({
+          size,
+          offset: new THREE.Vector3(x, lift, z),
+          material: postItMaterial,
+          color: null,
+          // A sheet this thin only adds shadow acne; the block casts for it.
+          castShadow: false,
+        });
     } else if (entity.type === "AudioBlock" || entity.type === "RC::Calendar") {
       components.push(
         this.cube(
@@ -748,7 +1017,12 @@ export const FIXTURE_WORLD: WorldEntity[] = [
   },
   { id: "zoom-1", type: "ZoomLink", pos: { x: 7, y: 0 } },
   { id: "link-1", type: "Link", pos: { x: 8, y: 0 } },
-  { id: "note-1", type: "Note", pos: { x: 9, y: 0 } },
+  {
+    id: "note-1",
+    type: "Note",
+    pos: { x: 9, y: 0 },
+    note_text: "Welcome! Notes show their text when you walk up to them.",
+  },
   { id: "audio-1", type: "AudioBlock", pos: { x: 10, y: 0 } },
   { id: "calendar-1", type: "RC::Calendar", pos: { x: 11, y: 0 } },
   { id: "room-1", type: "AudioRoom", pos: { x: 7, y: 3 }, width: 4, height: 4 },
