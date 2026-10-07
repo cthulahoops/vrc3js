@@ -11,7 +11,7 @@ FROM oven/bun:1-slim
 WORKDIR /app
 COPY server ./server
 COPY --from=build /app/dist ./dist
-ENV BFF_HOST=0.0.0.0 BFF_PORT=8000 STATIC_DIR=dist
+ENV NODE_ENV=production BFF_HOST=0.0.0.0 BFF_PORT=8000 STATIC_DIR=dist
 EXPOSE 8000
 USER bun
 CMD ["bun", "server/index.ts"]

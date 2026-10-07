@@ -268,6 +268,7 @@ async function serveStatic(request: Request): Promise<Response | undefined> {
   } catch {
     return;
   }
+  if (pathname.includes("\0")) return;
   if (pathname.endsWith("/")) pathname += "index.html";
 
   const filePath = resolve(staticDir, `.${pathname}`);

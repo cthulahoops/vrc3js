@@ -48,6 +48,8 @@ disco env:set --project vrc3js \
 
 `BFF_ALLOWED_ORIGINS` must include the public origin, because the default only allows the local Vite server to open the world WebSocket. Run a single instance, because sessions and the world stream are kept in memory.
 
+The Disco server needs GitHub access first (`disco github:apps:add`), and the Recurse OAuth app must list `https://<domain>/auth/callback` as its redirect URI.
+
 ## Screenshots
 
 The Playwright verifier accepts protocol-shaped entities, camera position and
