@@ -44,8 +44,13 @@ const enterButton = requiredElement<HTMLButtonElement>("#enter");
 async function enterWorld() {
   enterButton.disabled = true;
   enterButton.textContent = "Loading world…";
-  const app = await import("./app.js");
-  app.enterWorld();
+  try {
+    const app = await import("./app.js");
+    app.enterWorld();
+  } catch (error) {
+    console.error(error);
+    enterButton.textContent = "Couldn't load the world — reload to retry";
+  }
 }
 
 // The world (three.js, textures, skybox) is only fetched and started once the
