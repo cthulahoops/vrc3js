@@ -415,53 +415,102 @@ function postItTexture(
   );
 }
 
+const AVATAR_WIDTH = 256;
+const AVATAR_HEIGHT = 512;
+const AVATAR_PHOTO_HEIGHT = AVATAR_HEIGHT / 2;
+
+function avatarInitials(entity: AvatarEntity): string {
+  return (
+    entity.initials ||
+    entity.name
+      ?.split(/\s+/)
+      .filter((part) => /^\p{L}/u.test(part))
+      .map((part) => [...part][0])
+      .join("")
+      .slice(0, 2) ||
+    "?"
+  );
+}
+
+/** Write the name centred in the grey area below the photo. */
+function drawAvatarName(context: CanvasRenderingContext2D, name: string): void {
+  const inset = AVATAR_WIDTH * 0.07;
+  const top = AVATAR_PHOTO_HEIGHT + inset;
+  const height = AVATAR_HEIGHT - top - inset;
+  const layout = fitNoteText(
+    (line, fontSize) => measureRuns(context, line, fontSize),
+    name,
+    {
+      width: AVATAR_WIDTH - inset * 2,
+      height,
+      minFontSize: 18,
+      maxFontSize: 56,
+      lineSpacing: 1.15,
+      keepWords: true,
+    },
+  );
+  context.font = `600 ${layout.fontSize}px ${POST_IT_FONT}`;
+  context.fillStyle = POST_IT_INK;
+  context.textAlign = "left";
+  context.textBaseline = "top";
+  const textHeight = layout.lines.length * layout.lineHeight;
+  layout.lines.forEach((line, index) => {
+    const width = measureRuns(context, line, layout.fontSize);
+    drawRuns(
+      context,
+      line,
+      layout.fontSize,
+      (AVATAR_WIDTH - width) / 2,
+      top + (height - textHeight) / 2 + index * layout.lineHeight,
+    );
+  });
+}
+
 function avatarTexture(
   entity: AvatarEntity,
   image?: ImageAsset,
 ): THREE.CanvasTexture {
-  if (image)
-    return canvasTexture(
-      (context, canvas) => {
-        context.fillStyle = "#cccccc";
-        context.fillRect(0, 0, canvas.width, canvas.height);
-        const sourceWidth = image.width;
-        const sourceHeight = image.height;
-        const scale = Math.max(canvas.width / sourceWidth, 128 / sourceHeight);
-        const width = sourceWidth * scale;
-        const height = sourceHeight * scale;
-        context.drawImage(
-          image,
-          (canvas.width - width) / 2,
-          (128 - height) / 2,
-          width,
-          height,
-        );
-      },
-      null,
-      { width: 128, height: 256 },
-    );
-  const initials =
-    entity.initials ||
-    entity.name
-      ?.split(/\s+/)
-      .map((part) => part[0])
-      .join("")
-      .slice(0, 2) ||
-    "?";
   return canvasTexture(
     (context, canvas) => {
       context.fillStyle = "#cccccc";
       context.fillRect(0, 0, canvas.width, canvas.height);
-      context.fillStyle = entity.photo_color || "#c8ceca";
-      context.fillRect(0, 0, canvas.width, 128);
-      context.fillStyle = "#16201e";
-      context.textAlign = "center";
-      context.textBaseline = "middle";
-      context.font = "600 82px sans-serif";
-      context.fillText(initials, canvas.width / 2, 67, 112);
+      if (image) {
+        const scale = Math.max(
+          canvas.width / image.width,
+          AVATAR_PHOTO_HEIGHT / image.height,
+        );
+        const width = image.width * scale;
+        const height = image.height * scale;
+        context.save();
+        context.beginPath();
+        context.rect(0, 0, canvas.width, AVATAR_PHOTO_HEIGHT);
+        context.clip();
+        context.drawImage(
+          image,
+          (canvas.width - width) / 2,
+          (AVATAR_PHOTO_HEIGHT - height) / 2,
+          width,
+          height,
+        );
+        context.restore();
+      } else {
+        context.fillStyle = entity.photo_color || "#c8ceca";
+        context.fillRect(0, 0, canvas.width, AVATAR_PHOTO_HEIGHT);
+        context.fillStyle = "#16201e";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.font = "600 164px sans-serif";
+        context.fillText(
+          avatarInitials(entity),
+          canvas.width / 2,
+          AVATAR_PHOTO_HEIGHT * 0.52,
+          AVATAR_WIDTH * 0.875,
+        );
+      }
+      if (entity.name?.trim()) drawAvatarName(context, entity.name.trim());
     },
     null,
-    { width: 128, height: 256 },
+    { width: AVATAR_WIDTH, height: AVATAR_HEIGHT },
   );
 }
 
@@ -585,18 +634,11 @@ export class VirtualRcRenderer {
 
   cachedAvatarTexture(entity: AvatarEntity): THREE.Texture {
     const imageVersion = this.avatarImageVersions.get(entity.id) || 0;
-    const initials =
-      entity.initials ||
-      entity.name
-        ?.split(/\s+/)
-        .map((part) => part[0])
-        .join("")
-        .slice(0, 2) ||
-      "?";
     const image = this.avatarImages.get(entity.id);
+    const name = entity.name?.trim() || "";
     const visual = image
-      ? [entity.id, imageVersion]
-      : [initials, entity.photo_color || "#c8ceca"];
+      ? [entity.id, imageVersion, name]
+      : [avatarInitials(entity), entity.photo_color || "#c8ceca", name];
     const key = `avatar:${JSON.stringify(visual)}`;
     return this.texture(key, () =>
       avatarTexture(entity, this.avatarImages.get(entity.id)),
@@ -705,15 +747,17 @@ export class VirtualRcRenderer {
   }
 
   disposeAvatarImageVersion(id: EntityId, version: number): void {
-    const textureKey = `avatar:${JSON.stringify([id, version])}`;
-    const texture = this.textures.get(textureKey);
-    if (!texture) return;
-    const materialKey = `#ffffff:${texture.uuid}`;
-    const cachedMaterial = this.materials.get(materialKey);
-    cachedMaterial?.dispose();
-    texture.dispose();
-    this.materials.delete(materialKey);
-    this.textures.delete(textureKey);
+    // Photo textures are also keyed by name, so a renamed avatar may have left
+    // several textures behind for this id/version.
+    const prefix = `avatar:${JSON.stringify([id, version]).slice(0, -1)},`;
+    for (const [textureKey, texture] of [...this.textures]) {
+      if (!textureKey.startsWith(prefix)) continue;
+      const materialKey = `#ffffff:${texture.uuid}`;
+      this.materials.get(materialKey)?.dispose();
+      texture.dispose();
+      this.materials.delete(materialKey);
+      this.textures.delete(textureKey);
+    }
   }
 
   handleEntity(entity: EntityUpdate, forceRebuild = false): void {

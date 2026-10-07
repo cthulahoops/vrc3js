@@ -48,3 +48,13 @@ test("text that cannot fit at the minimum size ends with an ellipsis", () => {
   assert.ok(layout.lines.at(-1)!.endsWith("…"));
   assert.ok(measure(layout.lines.at(-1)!, 10) <= 100);
 });
+
+test("keepWords shrinks the font rather than breaking a word", () => {
+  const box = { width: 100, height: 400, minFontSize: 10, maxFontSize: 80 };
+  const layout = fitNoteText(measure, "Ada Lovelace", {
+    ...box,
+    keepWords: true,
+  });
+  assert.equal(layout.fontSize, 25);
+  assert.deepEqual(layout.lines, ["Ada", "Lovelace"]);
+});
