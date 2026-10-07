@@ -166,7 +166,9 @@ export function sanitizeEntity(
     };
   }
   if (type === "Avatar") {
-    const name = limitedString(value.name, 100);
+    // Upstream sends person_name; fixtures and older payloads use name.
+    const name =
+      limitedString(value.person_name, 100) ?? limitedString(value.name, 100);
     const initials = limitedString(value.initials, 4);
     const photoColor = limitedString(value.photo_color, 32);
     const imagePath = limitedString(value.image_path, 2_048);
@@ -186,7 +188,9 @@ export function sanitizeEntity(
     };
   }
   if (type === "Bot") {
-    const name = limitedString(value.name, 100);
+    // Upstream sends person_name; fixtures and older payloads use name.
+    const name =
+      limitedString(value.person_name, 100) ?? limitedString(value.name, 100);
     return {
       id,
       type,
