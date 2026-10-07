@@ -234,6 +234,9 @@ body,
   font: 9px DM Mono;
   letter-spacing: 0.05em;
 }
+.auth-status:empty {
+  display: none;
+}
 .controls {
   display: flex;
   gap: 25px;

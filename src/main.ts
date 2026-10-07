@@ -16,7 +16,7 @@ interface SessionResponse {
   authenticated?: unknown;
 }
 
-function showLogin(message: string) {
+function showLogin(message = "") {
   loginLink.hidden = false;
   authStatus.textContent = message;
 }
@@ -30,7 +30,7 @@ async function checkSession(): Promise<boolean> {
       ? ((await response.json()) as SessionResponse)
       : null;
     if (session?.authenticated) return true;
-    showLogin("Recurse Center members only");
+    showLogin("Recursers Only");
     setConnectionStatus("unauthenticated");
   } catch {
     showLogin("Unable to check your session. You can still try signing in.");

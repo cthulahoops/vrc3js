@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#121b1b" />
     <title>VRC3D — Three.js prototype</title>
+    <!-- Vite injects CSS from JS in dev; keep hidden overlays from flashing. -->
+    <style>
+      .hidden {
+        visibility: hidden;
+      }
+    </style>
   </head>
   <body>
     <div id="app">
@@ -35,13 +41,11 @@
         aria-describedby="login-copy auth-status"
       >
         <div class="gate-card">
-          <h1 id="login-title">Sign in to Virtual RC 3D</h1>
+          <h1 id="login-title">Welcome to Virtual RC 3JS.</h1>
           <a id="login-link" class="primary-action" href="/auth/login" hidden
-            >Log in</a
+            >Login</a
           >
-          <p id="auth-status" class="auth-status" aria-live="polite">
-            Checking your session…
-          </p>
+          <p id="auth-status" class="auth-status" aria-live="polite"></p>
         </div>
       </section>
       <section id="welcome" class="welcome hidden">
