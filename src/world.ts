@@ -48,6 +48,7 @@ const EMOJI_SHEET_URL =
   "https://cdn.jsdelivr.net/npm/emoji-datasource-apple@14.0.0/img/apple/sheets-256/64.png";
 const EMOJI_SIZE = 64;
 const EMOJI_CELL_SIZE = EMOJI_SIZE + 2;
+const PHOTO_ICON_URL = new URL("./assets/photo.svg", import.meta.url).href;
 
 export const COLORS: Record<EntityColor, string> = {
   gray: "#919c9c",
@@ -67,6 +68,7 @@ const ICONS: Record<IconType, readonly [string, string]> = {
   ZoomLink: ["↗", "#2472d9"],
   Link: ["↗", "#eeeeee"],
   AudioBlock: ["♪", "#eeeeee"],
+  PhotoBlock: ["▣", COLORS.gray],
   "RC::Calendar": ["31", "#eeeeee"],
   AudioRoom: ["●", "#eeeeee"],
 };
@@ -126,10 +128,9 @@ function indexEmojiSprites(data: EmojiEntry[]): Map<string, EmojiSprite> {
 export async function loadWorldAssets() {
   const [assets, emojiData, emojiSheet] = await Promise.all([
     Promise.all(
-      Object.entries(ORIGINAL_TEXTURES).map(async ([name, source]) => [
-        name,
-        await loadImage(source),
-      ]),
+      Object.entries({ ...ORIGINAL_TEXTURES, photo: PHOTO_ICON_URL }).map(
+        async ([name, source]) => [name, await loadImage(source)],
+      ),
     ),
     fetch(EMOJI_DATA_URL).then(async (response) => {
       if (!response.ok)
@@ -319,6 +320,7 @@ function iconTexture(
     ZoomLink: "zoom",
     Link: "link",
     AudioBlock: "audio_block",
+    PhotoBlock: "photo",
     "RC::Calendar": "calendar",
     AudioRoom: "microphone",
   };
@@ -950,6 +952,14 @@ export class VirtualRcRenderer {
           this.cachedIconTexture(entity.type),
         ),
       );
+    } else if (entity.type === "PhotoBlock") {
+      components.push(
+        this.cube(
+          new THREE.Vector3(1, 1, 1),
+          COLORS.gray,
+          this.cachedIconTexture(entity.type),
+        ),
+      );
     } else if (entity.type === "AudioRoom") {
       const texture = this.cachedIconTexture(entity.type, null, {
         x: entity.width,
@@ -1025,6 +1035,7 @@ export const FIXTURE_WORLD: WorldEntity[] = [
   },
   { id: "audio-1", type: "AudioBlock", pos: { x: 10, y: 0 } },
   { id: "calendar-1", type: "RC::Calendar", pos: { x: 11, y: 0 } },
+  { id: "photo-1", type: "PhotoBlock", pos: { x: 12, y: 0 } },
   { id: "room-1", type: "AudioRoom", pos: { x: 7, y: 3 }, width: 4, height: 4 },
 ];
 

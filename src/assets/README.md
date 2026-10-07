@@ -10,5 +10,8 @@ on an external asset host at runtime.
 - `starmap.png` SHA-256: `6ef523a687acd9fb7b88fb829e255ca67db7c9587619bebf612a488ec0787bfd`
 - `moon.png` SHA-256: `a9d01750e75cdc6a6763e233c11c81c50033f4010d4011dc48dc1103341484af`
 
+`photo.svg` is original to this repository: the photo-block camera icon, in
+the purple wall colour.
+
 The UI fonts are supplied at build time by the Fontsource npm packages declared
 in `package.json`, rather than copied into this directory.

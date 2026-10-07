@@ -286,7 +286,7 @@ test("different cube dimensions share a material batch through matrix scaling", 
   assert.equal(batch.size, 2);
 });
 
-test("fixture world batches its twenty-three cube components into thirteen draws", () => {
+test("fixture world batches its twenty-four cube components into fourteen draws", () => {
   const { scene, renderer } = makeRenderer();
   renderer.replaceEntities(FIXTURE_WORLD);
 
@@ -294,12 +294,12 @@ test("fixture world batches its twenty-three cube components into thirteen draws
     (total, handle) => total + (handle.userData.components?.length ?? 0),
     0,
   );
-  assert.equal(componentCount, 23);
-  assert.equal(renderer.instanceBatches.batches.size, 13);
+  assert.equal(componentCount, 24);
+  assert.equal(renderer.instanceBatches.batches.size, 14);
   assert.equal(
     scene.children.filter((child) => child instanceof THREE.InstancedMesh)
       .length,
-    13,
+    14,
   );
 });
 

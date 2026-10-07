@@ -7,6 +7,7 @@ export const ENTITY_TYPES = [
   "Link",
   "Note",
   "AudioBlock",
+  "PhotoBlock",
   "RC::Calendar",
   "AudioRoom",
 ] as const;
