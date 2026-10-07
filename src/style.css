@@ -49,19 +49,9 @@ body,
   border-radius: 50%;
   font: 500 18px DM Mono;
 }
-.brand strong,
-.brand small {
-  display: block;
-  letter-spacing: 0.06em;
-}
 .brand strong {
   font-size: 14px;
-}
-.brand small {
-  margin-top: 2px;
-  color: #bfc8c3;
-  font: 400 9px DM Mono;
-  letter-spacing: 0.13em;
+  letter-spacing: 0.06em;
 }
 .status {
   padding: 9px 13px;
