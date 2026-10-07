@@ -92,47 +92,6 @@ body,
   background: #dc6d6d;
   box-shadow: 0 0 8px #dc6d6d;
 }
-.legend {
-  position: fixed;
-  z-index: 3;
-  right: 25px;
-  top: 84px;
-  width: 166px;
-  padding: 13px;
-  border: 1px solid #ffffff17;
-  border-radius: 12px;
-  background: #10181892;
-  backdrop-filter: blur(10px);
-}
-.legend p {
-  margin: 0 0 10px;
-  color: #82928c;
-  font: 9px DM Mono;
-  letter-spacing: 0.14em;
-}
-.person {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 7px;
-  color: #dce1dd;
-  font-size: 10px;
-}
-.person .face {
-  display: grid;
-  place-items: center;
-  width: 23px;
-  height: 23px;
-  border-radius: 7px;
-  font-size: 12px;
-}
-.person em {
-  margin-left: auto;
-  width: 5px;
-  height: 5px;
-  background: #70d086;
-  border-radius: 50%;
-}
 .welcome,
 .gate {
   position: fixed;
@@ -281,8 +240,7 @@ kbd {
   opacity: 1;
 }
 @media (max-width: 650px) {
-  .status,
-  .legend {
+  .status {
     display: none;
   }
   .topbar {

@@ -118,68 +118,16 @@ function syncSnapshotAvatarImages(entities: EntityUpdate[]): void {
   }
   entities.forEach(syncAvatarImage);
 }
-const nearby = requiredElement<HTMLElement>("#nearby");
-const legendEntityTypes = new Map<EntityId, string>();
-const legendTypeCounts = new Map<string, number>();
-let displayedLegendTypes: string[] = [];
-function renderLegend() {
-  const types = [...legendTypeCounts.keys()].slice(0, 6);
-  if (
-    types.length === displayedLegendTypes.length &&
-    types.every((type, index) => type === displayedLegendTypes[index])
-  )
-    return;
-  displayedLegendTypes = types;
-  nearby.replaceChildren(
-    ...types.map((type) => {
-      const row = document.createElement("div");
-      row.className = "person";
-      const face = document.createElement("span");
-      face.className = "face";
-      face.textContent = "◆";
-      row.append(face, document.createTextNode(type));
-      return row;
-    }),
-  );
-}
-function resetLegend() {
-  legendEntityTypes.clear();
-  legendTypeCounts.clear();
-  for (const [id, object] of world.entities) {
-    const type = object.userData.entity!.type;
-    legendEntityTypes.set(id, type);
-    legendTypeCounts.set(type, (legendTypeCounts.get(type) || 0) + 1);
-  }
-  renderLegend();
-}
-function updateLegendEntity(id: EntityId) {
-  const previousType = legendEntityTypes.get(id);
-  const nextType = world.entities.get(id)?.userData.entity?.type;
-  if (previousType === nextType) return;
-  if (previousType) {
-    const count = (legendTypeCounts.get(previousType) ?? 0) - 1;
-    if (count) legendTypeCounts.set(previousType, count);
-    else legendTypeCounts.delete(previousType);
-    legendEntityTypes.delete(id);
-  }
-  if (nextType) {
-    legendEntityTypes.set(id, nextType);
-    legendTypeCounts.set(nextType, (legendTypeCounts.get(nextType) || 0) + 1);
-  }
-  renderLegend();
-}
 const streamHandlers = {
   onSnapshot(entities) {
     world.replaceEntities(entities);
     syncSnapshotAvatarImages(entities);
-    resetLegend();
     renderer.shadowMap.needsUpdate = true;
     if (screenshotMode) renderScreenshot();
   },
   onEntity(entity) {
     world.handleEntity(entity);
     syncAvatarImage(entity);
-    updateLegendEntity(entity.id);
     renderer.shadowMap.needsUpdate = true;
     if (screenshotMode) renderScreenshot();
   },
@@ -291,7 +239,6 @@ if (verificationMode) {
       try {
         const fixture = parseVerificationFixture(input);
         world.replaceEntities(fixture.entities);
-        resetLegend();
         camera.position.set(
           fixture.camera.position.x,
           fixture.camera.position.y,

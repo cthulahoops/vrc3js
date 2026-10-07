@@ -22,7 +22,7 @@ cp env.example .env
 npm run dev
 ```
 
-Open `http://localhost:5173`, sign in with Recurse Center, and select **Enter world**. Then use the mouse to look and WASD to move. Press Escape to release the mouse. Set `RC_ENDPOINT` to override the default `recurse.rctogether.com` upstream host.
+Open `http://localhost:5173`, sign in with Recurse Center, and select **Enter Virtual RC**. Then use the mouse to look and WASD to move. Press Escape to release the mouse. Set `RC_ENDPOINT` to override the default `recurse.rctogether.com` upstream host.
 
 The upstream WebSocket accepts world snapshots up to 16 MiB by default. Set `RC_MAX_PAYLOAD_BYTES` to a larger byte count if the configured world requires it.
 
