@@ -1,0 +1,4 @@
+#!/bin/sh
+# Enabled by `npm install` (the "prepare" script sets core.hooksPath).
+# Checks the whole tree, so a failure already on main shows up here too.
+npm run -s format:check && npm run -s typecheck

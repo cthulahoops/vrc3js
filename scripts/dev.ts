@@ -3,11 +3,10 @@ import process from "node:process";
 
 const commands = [
   spawn("bun", ["server/index.ts"], { stdio: "inherit", env: process.env }),
-  spawn(
-    process.execPath,
-    ["node_modules/vite/bin/vite.js", "--host", "localhost"],
-    { stdio: "inherit", env: process.env },
-  ),
+  spawn(process.execPath, ["node_modules/vite/bin/vite.js"], {
+    stdio: "inherit",
+    env: process.env,
+  }),
 ];
 
 let stopping = false;
