@@ -30,6 +30,24 @@ The upstream WebSocket accepts world snapshots up to 16 MiB by default. Set `RC_
 
 The BFF authenticates visitors through Recurse Center OAuth before accepting a world WebSocket. Register `OAUTH_REDIRECT_URI` as the OAuth application's callback URL; `APP_ORIGIN` is where successful callbacks return. Sessions are stored in memory for 24 hours, so restarting the BFF signs everyone out. The service accepts browser connections only from `http://127.0.0.1:5173` and `http://localhost:5173` by default. `BFF_ALLOWED_ORIGINS` can provide a comma-separated exact allowlist. All credentials remain server-side and must never use Vite's client-visible `VITE_*` environment variables.
 
+## Deploy
+
+The project deploys with [Disco](https://disco.cloud). The `Dockerfile` builds the
+frontend with Vite and runs the BFF under Bun on port 8000. In this setup the BFF
+also serves the built files from `STATIC_DIR`, so the whole app runs from one origin.
+
+```bash
+disco projects:add --name vrc3js --github cthulahoops/vrc3js --domain vrc3js.example.com
+disco env:set --project vrc3js \
+  OAUTH_CLIENT_ID=... OAUTH_CLIENT_SECRET=... \
+  OAUTH_REDIRECT_URI=https://vrc3js.example.com/auth/callback \
+  APP_ORIGIN=https://vrc3js.example.com \
+  BFF_ALLOWED_ORIGINS=https://vrc3js.example.com \
+  RC_APP_ID=... RC_APP_SECRET=...
+```
+
+`BFF_ALLOWED_ORIGINS` must include the public origin, because the default only allows the local Vite server to open the world WebSocket. Run a single instance, because sessions and the world stream are kept in memory.
+
 ## Screenshots
 
 The Playwright verifier accepts protocol-shaped entities, camera position and
