@@ -197,10 +197,12 @@ let verificationHasFixture = false;
 let verificationFramesUntilReady = 0;
 const hint = requiredElement<HTMLElement>("#hint");
 function lock() {
-  canvas.requestPointerLock();
+  // Pointer lock needs a recent user gesture; if the world took too long to
+  // load, a click on the canvas takes it instead.
+  canvas.requestPointerLock().catch(() => {});
   welcome.classList.add("hidden");
 }
-requiredElement<HTMLElement>("#enter").addEventListener("click", lock);
+export { lock as enterWorld };
 canvas.addEventListener("click", () => {
   if (welcome.classList.contains("hidden")) lock();
 });

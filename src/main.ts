@@ -39,11 +39,26 @@ async function checkSession(): Promise<boolean> {
   return false;
 }
 
-// The world (three.js, textures, skybox) is only fetched and started once we
-// know the visitor may see it; verification fixtures skip the session check.
-if (query.has("verify") || (await checkSession())) {
-  authStatus.textContent = "Loading world…";
+const enterButton = requiredElement<HTMLButtonElement>("#enter");
+
+async function enterWorld() {
+  enterButton.disabled = true;
+  enterButton.textContent = "Loading world…";
+  const app = await import("./app.js");
+  app.enterWorld();
+}
+
+// The world (three.js, textures, skybox) is only fetched and started once the
+// visitor chooses to enter; verification and screenshot pages load it
+// straight away.
+if (query.has("verify")) {
   await import("./app.js");
   login.classList.add("hidden");
-  if (!query.has("verify")) welcome.classList.remove("hidden");
+} else if (await checkSession()) {
+  login.classList.add("hidden");
+  if (query.has("screenshot")) await import("./app.js");
+  else welcome.classList.remove("hidden");
+  enterButton.addEventListener("click", () => void enterWorld(), {
+    once: true,
+  });
 }
