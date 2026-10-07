@@ -13,6 +13,8 @@ export interface NoteTextBox {
   minFontSize: number;
   maxFontSize: number;
   lineSpacing?: number;
+  /** Shrink the font so no word has to be broken, down to `minFontSize`. */
+  keepWords?: boolean;
 }
 
 function splitLongWord(
@@ -82,6 +84,16 @@ export function fitNoteText(
 
   let low = box.minFontSize;
   let high = box.maxFontSize;
+  if (box.keepWords) {
+    // Text width scales roughly with font size, so the widest word sets a
+    // ceiling. Hinting makes the scaling inexact; step down until it fits.
+    const words = text.split(/\s+/);
+    const widest = (fontSize: number) =>
+      Math.max(0, ...words.map((word) => measure(word, fontSize)));
+    if (widest(high) > box.width)
+      high = Math.max(low, Math.floor((high * box.width) / widest(high)));
+    while (high > low && widest(high) > box.width) high -= 1;
+  }
   if (layoutAt(high).fits) low = high;
   // Font sizes are whole pixels, so a binary search settles in a few passes.
   while (high - low > 1) {

@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import type { NoteEntity, WallEntity } from "../server/protocol.js";
+import type {
+  AvatarEntity,
+  NoteEntity,
+  WallEntity,
+} from "../server/protocol.js";
 import type { InstanceBatch } from "../src/instanceBatches.js";
 import type {
   EntityHandle,
@@ -371,4 +375,36 @@ test("editing or deleting a note drops its stale text texture", () => {
   renderer.handleEntity({ id: "a", type: "Note", deleted: true });
   assert.equal(renderer.noteDetails.size, 0);
   assert.equal(renderer.notes.size, 0);
+});
+
+test("an avatar's name texture is released when it is renamed or leaves", () => {
+  const { renderer } = makeRenderer();
+  const avatar = (name: string): AvatarEntity => ({
+    id: "ada",
+    type: "Avatar",
+    pos: { x: 0, y: 0 },
+    name,
+  });
+  const avatarTexture = () => {
+    const material = firstBatch(
+      renderer,
+      renderer.entities.get("ada"),
+    ).material;
+    assert.ok(material instanceof THREE.MeshStandardMaterial);
+    assert.ok(material.map);
+    return material.map;
+  };
+  let disposed = 0;
+  renderer.handleEntity(avatar("Ada Lovelace"));
+  avatarTexture().addEventListener("dispose", () => (disposed += 1));
+
+  renderer.handleEntity(avatar("Ada King"));
+  assert.equal(disposed, 1);
+  const renamed = avatarTexture();
+  renamed.addEventListener("dispose", () => (disposed += 1));
+
+  renderer.handleEntity({ id: "ada", type: "Avatar", deleted: true });
+  assert.equal(disposed, 2);
+  assert.equal(renderer.avatarTextureKeys.size, 0);
+  assert.ok(![...renderer.textures.values()].includes(renamed));
 });

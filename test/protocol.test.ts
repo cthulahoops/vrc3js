@@ -32,6 +32,16 @@ test("sanitizes avatars and replaces upstream image paths with local URLs", () =
   assert.deepEqual(observed, [["42", "https://private/image"]]);
 });
 
+test("reads the avatar name from upstream person_name", () => {
+  const avatar = sanitizeEntity({
+    id: 7,
+    type: "Avatar",
+    pos: { x: 1, y: 2 },
+    person_name: "Grace Hopper",
+  });
+  assert.equal(avatar && "name" in avatar && avatar.name, "Grace Hopper");
+});
+
 test("accepts deletion events without a position", () => {
   assert.deepEqual(
     sanitizeEntity({ id: "wall-1", type: "Wall", deleted: true }),
