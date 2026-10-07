@@ -552,6 +552,9 @@ export class VirtualRcRenderer {
   readonly entities = new Map<EntityId, EntityHandle>();
   readonly avatarImages = new Map<EntityId, ImageAsset>();
   readonly avatarImageVersions = new Map<EntityId, number>();
+  // Each avatar's texture carries its name, so it is unique to the avatar and
+  // is released when the avatar changes or leaves.
+  readonly avatarTextureKeys = new Map<EntityId, string>();
   readonly geometries = new Map<string, THREE.BoxGeometry>();
   readonly materials = new Map<string, THREE.MeshStandardMaterial>();
   readonly textures = new Map<string, THREE.Texture>();
@@ -638,8 +641,14 @@ export class VirtualRcRenderer {
     const name = entity.name?.trim() || "";
     const visual = image
       ? [entity.id, imageVersion, name]
-      : [avatarInitials(entity), entity.photo_color || "#c8ceca", name];
+      : [
+          entity.id,
+          avatarInitials(entity),
+          entity.photo_color || "#c8ceca",
+          name,
+        ];
     const key = `avatar:${JSON.stringify(visual)}`;
+    this.avatarTextureKeys.set(entity.id, key);
     return this.texture(key, () =>
       avatarTexture(entity, this.avatarImages.get(entity.id)),
     );
@@ -731,33 +740,25 @@ export class VirtualRcRenderer {
     this.avatarImageVersions.set(id, previousVersion + 1);
     const current = this.entities.get(id)?.userData.entity;
     if (current?.type === "Avatar") this.handleEntity(current, true);
-    // Uploaded avatar textures are unique to an id/version, so once the scene
-    // object has been rebuilt no other entity can still reference this pair.
-    if (previousVersion) this.disposeAvatarImageVersion(id, previousVersion);
   }
 
   clearAvatarImage(id: EntityId): void {
     if (!this.avatarImages.has(id)) return;
-    const previousVersion = this.avatarImageVersions.get(id) || 0;
     this.avatarImages.delete(id);
     this.avatarImageVersions.delete(id);
     const current = this.entities.get(id)?.userData.entity;
     if (current?.type === "Avatar") this.handleEntity(current, true);
-    if (previousVersion) this.disposeAvatarImageVersion(id, previousVersion);
   }
 
-  disposeAvatarImageVersion(id: EntityId, version: number): void {
-    // Photo textures are also keyed by name, so a renamed avatar may have left
-    // several textures behind for this id/version.
-    const prefix = `avatar:${JSON.stringify([id, version]).slice(0, -1)},`;
-    for (const [textureKey, texture] of [...this.textures]) {
-      if (!textureKey.startsWith(prefix)) continue;
-      const materialKey = `#ffffff:${texture.uuid}`;
-      this.materials.get(materialKey)?.dispose();
-      texture.dispose();
-      this.materials.delete(materialKey);
-      this.textures.delete(textureKey);
-    }
+  /** Dispose an avatar texture once no rendered avatar uses it. */
+  disposeAvatarTexture(key: string | undefined): void {
+    const texture = key && this.textures.get(key);
+    if (!texture) return;
+    const materialKey = `#ffffff:${texture.uuid}`;
+    this.materials.get(materialKey)?.dispose();
+    texture.dispose();
+    this.materials.delete(materialKey);
+    this.textures.delete(key);
   }
 
   handleEntity(entity: EntityUpdate, forceRebuild = false): void {
@@ -776,11 +777,14 @@ export class VirtualRcRenderer {
       this.updateEntityMatrices(currentObject);
       return;
     }
+    const previousAvatarTexture = this.avatarTextureKeys.get(entity.id);
+    this.avatarTextureKeys.delete(entity.id);
     const components = this.createEntity(entity);
     if (!components) {
       // A renderable record can become intentionally invisible (for example,
       // the upstream default bot emoji). Do not leave its old object behind.
       if (currentObject) this.deleteEntity(entity.id);
+      this.disposeAvatarTexture(previousAvatarTexture);
       return;
     }
     const rendered = (currentObject || new THREE.Object3D()) as EntityHandle;
@@ -788,6 +792,8 @@ export class VirtualRcRenderer {
     rendered.userData.entity = structuredClone(entity);
     this.setEntityComponents(rendered, components);
     this.entities.set(entity.id, rendered);
+    if (previousAvatarTexture !== this.avatarTextureKeys.get(entity.id))
+      this.disposeAvatarTexture(previousAvatarTexture);
     if (entity.type === "Note") this.notes.add(entity.id);
     else {
       this.notes.delete(entity.id);
@@ -855,10 +861,10 @@ export class VirtualRcRenderer {
     this.entities.delete(id);
     this.notes.delete(id);
     this.disposeNoteDetail(id);
-    const imageVersion = this.avatarImageVersions.get(id) || 0;
     this.avatarImages.delete(id);
     this.avatarImageVersions.delete(id);
-    if (imageVersion) this.disposeAvatarImageVersion(id, imageVersion);
+    this.disposeAvatarTexture(this.avatarTextureKeys.get(id));
+    this.avatarTextureKeys.delete(id);
   }
 
   replaceEntities(entities: EntityUpdate[]): void {

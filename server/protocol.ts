@@ -188,9 +188,7 @@ export function sanitizeEntity(
     };
   }
   if (type === "Bot") {
-    // Upstream sends person_name; fixtures and older payloads use name.
-    const name =
-      limitedString(value.person_name, 100) ?? limitedString(value.name, 100);
+    const name = limitedString(value.name, 100);
     return {
       id,
       type,
