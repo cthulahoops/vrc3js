@@ -1,3 +1,5 @@
+import type { UpstreamEntity } from "./upstream.generated.js";
+
 export const ENTITY_TYPES = [
   "Wall",
   "Desk",
@@ -10,7 +12,7 @@ export const ENTITY_TYPES = [
   "PhotoBlock",
   "RC::Calendar",
   "AudioRoom",
-] as const;
+] as const satisfies readonly UpstreamEntity["type"][];
 
 export const ENTITY_COLORS = [
   "gray",
@@ -43,8 +45,6 @@ export interface WallEntity extends EntityBase {
 export interface AvatarEntity extends EntityBase {
   type: "Avatar";
   name?: string;
-  initials?: string;
-  photo_color?: string;
   image_url?: string;
 }
 export interface BotEntity extends EntityBase {
@@ -85,6 +85,15 @@ export type DecodedActionCableMessage =
     }
   | { kind: "snapshot"; entities: EntityUpdate[] }
   | { kind: "entity"; entity: EntityUpdate };
+
+/**
+ * An upstream entity whose field names are known but whose values have not
+ * been checked yet. Reading a field upstream doesn't send is a compile error.
+ */
+type Unchecked<T> = { [K in keyof T]?: unknown };
+type Upstream<Type extends EntityType> = Unchecked<
+  Extract<UpstreamEntity, { type: Type }>
+>;
 
 const supportedTypes = new Set<string>(ENTITY_TYPES);
 const colors = new Set<string>(ENTITY_COLORS);
@@ -154,32 +163,28 @@ export function sanitizeEntity(
   const pos = { x: value.pos.x, y: value.pos.y };
 
   if (type === "Wall") {
-    const wallText = limitedString(value.wall_text, 8);
+    const wall: Upstream<"Wall"> = value;
+    const wallText = limitedString(wall.wall_text, 8);
     return {
       id,
       type,
       pos,
-      color: colors.has(String(value.color))
-        ? (value.color as EntityColor)
+      color: colors.has(String(wall.color))
+        ? (wall.color as EntityColor)
         : "gray",
       ...(wallText ? { wall_text: wallText } : {}),
     };
   }
   if (type === "Avatar") {
-    // Upstream sends person_name; fixtures and older payloads use name.
-    const name =
-      limitedString(value.person_name, 100) ?? limitedString(value.name, 100);
-    const initials = limitedString(value.initials, 4);
-    const photoColor = limitedString(value.photo_color, 32);
-    const imagePath = limitedString(value.image_path, 2_048);
+    const avatar: Upstream<"Avatar"> = value;
+    const name = limitedString(avatar.person_name, 100);
+    const imagePath = limitedString(avatar.image_path, 2_048);
     onAvatarImage?.(id, imagePath);
     return {
       id,
       type,
       pos,
       ...(name ? { name } : {}),
-      ...(initials ? { initials } : {}),
-      ...(photoColor ? { photo_color: photoColor } : {}),
       ...(imagePath
         ? {
             image_url: `/api/avatars/${encodeURIComponent(id)}?v=${avatarImageVersion(imagePath)}`,
@@ -188,25 +193,28 @@ export function sanitizeEntity(
     };
   }
   if (type === "Bot") {
-    const name = limitedString(value.name, 100);
+    const bot: Upstream<"Bot"> = value;
+    const name = limitedString(bot.name, 100);
     return {
       id,
       type,
       pos,
-      emoji: limitedString(value.emoji, 16) || "🤖",
+      emoji: limitedString(bot.emoji, 16) || "🤖",
       ...(name ? { name } : {}),
     };
   }
   if (type === "AudioRoom") {
+    const room: Upstream<"AudioRoom"> = value;
     if (
-      !finiteNumber(value.width, 0.01, 1_000) ||
-      !finiteNumber(value.height, 0.01, 1_000)
+      !finiteNumber(room.width, 0.01, 1_000) ||
+      !finiteNumber(room.height, 0.01, 1_000)
     )
       return null;
-    return { id, type, pos, width: value.width, height: value.height };
+    return { id, type, pos, width: room.width, height: room.height };
   }
   if (type === "Note") {
-    const noteText = limitedString(value.note_text, 4_000);
+    const note: Upstream<"Note"> = value;
+    const noteText = limitedString(note.note_text, 4_000);
     return { id, type, pos, ...(noteText ? { note_text: noteText } : {}) };
   }
   return { id, type, pos } as SimpleEntity;

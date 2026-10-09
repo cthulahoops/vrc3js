@@ -411,9 +411,7 @@
         "x": 5,
         "y": 3
       },
-      "name": "Ada Lovelace",
-      "initials": "AL",
-      "photo_color": "#d7b18a"
+      "person_name": "Ada Lovelace"
     },
     {
       "id": "note-free",

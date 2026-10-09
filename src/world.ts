@@ -421,14 +421,12 @@ const AVATAR_PHOTO_HEIGHT = AVATAR_HEIGHT / 2;
 
 function avatarInitials(entity: AvatarEntity): string {
   return (
-    entity.initials ||
     entity.name
       ?.split(/\s+/)
       .filter((part) => /^\p{L}/u.test(part))
       .map((part) => [...part][0])
       .join("")
-      .slice(0, 2) ||
-    "?"
+      .slice(0, 2) || "?"
   );
 }
 
@@ -494,7 +492,7 @@ function avatarTexture(
         );
         context.restore();
       } else {
-        context.fillStyle = entity.photo_color || "#c8ceca";
+        context.fillStyle = "#c8ceca";
         context.fillRect(0, 0, canvas.width, AVATAR_PHOTO_HEIGHT);
         context.fillStyle = "#16201e";
         context.textAlign = "center";
@@ -641,12 +639,7 @@ export class VirtualRcRenderer {
     const name = entity.name?.trim() || "";
     const visual = image
       ? [entity.id, imageVersion, name]
-      : [
-          entity.id,
-          avatarInitials(entity),
-          entity.photo_color || "#c8ceca",
-          name,
-        ];
+      : [entity.id, avatarInitials(entity), "#c8ceca", name];
     const key = `avatar:${JSON.stringify(visual)}`;
     this.avatarTextureKeys.set(entity.id, key);
     return this.texture(key, () =>
@@ -1065,8 +1058,6 @@ export const FIXTURE_WORLD: WorldEntity[] = [
     type: "Avatar",
     pos: { x: 3, y: 4 },
     name: "Ada Lovelace",
-    initials: "AL",
-    photo_color: "#d7b18a",
   },
   {
     id: "bot-1",
