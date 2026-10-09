@@ -37,12 +37,12 @@ const socket = new WebSocketWithOptions(`wss://${endpoint}/cable?${query}`, {
   headers: { Origin: `https://${endpoint}` },
 });
 
-/** The kinds of value seen at one place in the data, and how often. */
+/** The values seen at one place in the data, and how often. */
 interface Shape {
   seen: number;
-  kinds: Set<string>;
+  primitives: Set<string>;
   object?: ObjectShape;
-  items?: Shape;
+  array?: { items?: Shape };
 }
 interface ObjectShape {
   samples: number;
@@ -63,37 +63,48 @@ function kindOf(value: unknown): string {
   return typeof value;
 }
 
+function emptyShape(): Shape {
+  return { seen: 0, primitives: new Set() };
+}
+
 function observe(shape: Shape, value: unknown) {
   shape.seen += 1;
-  const kind = kindOf(value);
-  shape.kinds.add(kind);
-  if (kind === "object")
-    observeObject(
-      (shape.object ??= { samples: 0, fields: new Map() }),
-      value as object,
-    );
-  if (kind === "array")
-    for (const item of value as unknown[])
-      observe((shape.items ??= { seen: 0, kinds: new Set() }), item);
+  if (Array.isArray(value)) {
+    const array = (shape.array ??= {});
+    const items: readonly unknown[] = value;
+    for (const item of items) observe((array.items ??= emptyShape()), item);
+  } else if (typeof value === "object" && value !== null) {
+    observeObject((shape.object ??= { samples: 0, fields: new Map() }), value);
+  } else {
+    shape.primitives.add(kindOf(value));
+  }
+}
+
+/** Every kind seen at this place, in a stable order. */
+function kinds(shape: Shape): string[] {
+  return [
+    ...shape.primitives,
+    ...(shape.object ? ["object"] : []),
+    ...(shape.array ? ["array"] : []),
+  ].sort();
 }
 
 function observeObject(shape: ObjectShape, value: object) {
   shape.samples += 1;
   for (const [key, field] of Object.entries(value)) {
     let fieldShape = shape.fields.get(key);
-    if (!fieldShape)
-      shape.fields.set(key, (fieldShape = { seen: 0, kinds: new Set() }));
+    if (!fieldShape) shape.fields.set(key, (fieldShape = emptyShape()));
     observe(fieldShape, field);
   }
 }
 
 function record(entity: unknown, source: "snapshot" | "updates") {
   if (typeof entity !== "object" || entity === null) return;
-  const { type, deleted } = entity as { type?: unknown; deleted?: unknown };
-  if (deleted === true) {
+  if ("deleted" in entity && entity.deleted === true) {
     deletions += 1;
     return;
   }
+  const type = "type" in entity ? entity.type : undefined;
   const name = typeof type === "string" ? type : `<${kindOf(type)}>`;
   let summary = types.get(name);
   if (!summary) {
@@ -164,14 +175,13 @@ async function report() {
   const names = [...types.keys()].sort();
 
   console.log("Entity types seen on the stream:\n");
-  for (const name of names) {
-    const { snapshot, updates, shape } = types.get(name)!;
+  for (const [name, { snapshot, updates, shape }] of byName(types)) {
     const status = supported.has(name) ? "supported" : "UNSUPPORTED";
     console.log(
       `${name}  [${status}]  snapshot=${snapshot} updates=${updates}`,
     );
     for (const [key, field] of byName(shape.fields))
-      console.log(`    ${key}: ${[...field.kinds].join(" | ")}`);
+      console.log(`    ${key}: ${kinds(field).join(" | ")}`);
   }
 
   const unsupported = names.filter((name) => !supported.has(name));
@@ -209,16 +219,21 @@ const MAX_FIELDS = 40;
 const FIELD_NAME = /^[a-z_][a-z0-9_]*$/;
 
 function renderShape(shape: Shape, depth: number): string {
-  return [...shape.kinds]
-    .sort()
-    .map((kind) => {
-      if (kind === "object") return renderObject(shape.object!, depth + 1);
-      if (kind === "array")
-        return shape.items
-          ? `Array<${renderShape(shape.items, depth + 1)}>`
-          : "unknown[]";
-      return kind;
-    })
+  const { object, array } = shape;
+  const rendered = [...shape.primitives].map(
+    (kind): [kind: string, type: string] => [kind, kind],
+  );
+  if (object) rendered.push(["object", renderObject(object, depth + 1)]);
+  if (array)
+    rendered.push([
+      "array",
+      array.items
+        ? `Array<${renderShape(array.items, depth + 1)}>`
+        : "unknown[]",
+    ]);
+  return rendered
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, type]) => type)
     .join(" | ");
 }
 
@@ -249,16 +264,17 @@ function interfaceName(type: string): string {
 
 function generate(): string {
   // Skip the <kind> placeholders record() uses for a missing or odd type.
-  const names = [...types.keys()]
-    .filter((name) => /^[A-Za-z][A-Za-z0-9:]*$/.test(name))
-    .sort();
-  const interfaces = names.map(
-    (name) =>
-      `export interface ${interfaceName(name)} ${renderObject(types.get(name)!.shape, 0, name)}`,
+  const entries = byName(types).filter(([name]) =>
+    /^[A-Za-z][A-Za-z0-9:]*$/.test(name),
   );
-  const fieldLists = names.map(
-    (name) =>
-      `${JSON.stringify(name)}: ${JSON.stringify(byName(types.get(name)!.shape.fields).map(([key]) => key))},`,
+  const names = entries.map(([name]) => name);
+  const interfaces = entries.map(
+    ([name, { shape }]) =>
+      `export interface ${interfaceName(name)} ${renderObject(shape, 0, name)}`,
+  );
+  const fieldLists = entries.map(
+    ([name, { shape }]) =>
+      `${JSON.stringify(name)}: ${JSON.stringify(byName(shape.fields).map(([key]) => key))},`,
   );
   return `// Generated by \`npm run dump:entities -- --write\` from the RC Together
 // stream: field names and value kinds only. Do not edit by hand; regenerate
