@@ -238,8 +238,8 @@ export function sanitizeEntity(
     case "RC::Calendar":
       return { id, type, pos };
     default: {
-      const unhandled: never = type;
-      return unhandled;
+      const _exhaustive: never = type;
+      return _exhaustive;
     }
   }
 }
