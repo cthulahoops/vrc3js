@@ -4,42 +4,32 @@ import {
   decodeActionCableMessage,
   sanitizeEntity,
 } from "../server/protocol.js";
+import type {
+  UpstreamAvatar,
+  UpstreamNote,
+} from "../server/upstream.generated.js";
 
 test("sanitizes avatars and replaces upstream image paths with local URLs", () => {
   const observed: Array<[string, string | undefined]> = [];
+  const upstream = {
+    id: 42,
+    type: "Avatar",
+    pos: { x: 3, y: 4 },
+    person_name: "Ada",
+    image_path: "https://private/image",
+    muted: true,
+  } satisfies Partial<UpstreamAvatar>;
   assert.deepEqual(
-    sanitizeEntity(
-      {
-        id: 42,
-        type: "Avatar",
-        pos: { x: 3, y: 4 },
-        name: "Ada",
-        image_path: "https://private/image",
-        photo_color: "#abcdef",
-        admin: true,
-      },
-      (id, path) => observed.push([id, path]),
-    ),
+    sanitizeEntity(upstream, (id, path) => observed.push([id, path])),
     {
       id: "42",
       type: "Avatar",
       pos: { x: 3, y: 4 },
       name: "Ada",
-      photo_color: "#abcdef",
       image_url: "/api/avatars/42?v=112txgb",
     },
   );
   assert.deepEqual(observed, [["42", "https://private/image"]]);
-});
-
-test("reads the avatar name from upstream person_name", () => {
-  const avatar = sanitizeEntity({
-    id: 7,
-    type: "Avatar",
-    pos: { x: 1, y: 2 },
-    person_name: "Grace Hopper",
-  });
-  assert.equal(avatar && "name" in avatar && avatar.name, "Grace Hopper");
 });
 
 test("accepts deletion events without a position", () => {
@@ -96,13 +86,13 @@ test("rejects malformed positions and dimensions", () => {
 test("keeps note text and bounds its length", () => {
   assert.deepEqual(
     sanitizeEntity({
-      id: "note-1",
+      id: 1,
       type: "Note",
       pos: { x: 1, y: 2 },
       note_text: "Back in 5",
-      updated_by: { name: "Ada" },
-    }),
-    { id: "note-1", type: "Note", pos: { x: 1, y: 2 }, note_text: "Back in 5" },
+      updated_by: { id: 7, name: "Ada" },
+    } satisfies Partial<UpstreamNote>),
+    { id: "1", type: "Note", pos: { x: 1, y: 2 }, note_text: "Back in 5" },
   );
   const long = sanitizeEntity({
     id: "note-2",

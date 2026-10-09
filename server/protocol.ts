@@ -1,3 +1,5 @@
+import type { UpstreamEntity } from "./upstream.generated.js";
+
 export const ENTITY_TYPES = [
   "Wall",
   "Desk",
@@ -10,7 +12,7 @@ export const ENTITY_TYPES = [
   "PhotoBlock",
   "RC::Calendar",
   "AudioRoom",
-] as const;
+] as const satisfies readonly UpstreamEntity["type"][];
 
 export const ENTITY_COLORS = [
   "gray",
@@ -43,8 +45,6 @@ export interface WallEntity extends EntityBase {
 export interface AvatarEntity extends EntityBase {
   type: "Avatar";
   name?: string;
-  initials?: string;
-  photo_color?: string;
   image_url?: string;
 }
 export interface BotEntity extends EntityBase {
@@ -65,9 +65,9 @@ type SimpleEntityType = Exclude<
   EntityType,
   "Wall" | "Avatar" | "Bot" | "AudioRoom" | "Note"
 >;
-export type SimpleEntity = {
-  [Type in SimpleEntityType]: EntityBase & { type: Type };
-}[SimpleEntityType];
+export interface SimpleEntity extends EntityBase {
+  type: SimpleEntityType;
+}
 export type WorldEntity =
   | WallEntity
   | AvatarEntity
@@ -86,8 +86,35 @@ export type DecodedActionCableMessage =
   | { kind: "snapshot"; entities: EntityUpdate[] }
   | { kind: "entity"; entity: EntityUpdate };
 
-const supportedTypes = new Set<string>(ENTITY_TYPES);
-const colors = new Set<string>(ENTITY_COLORS);
+/**
+ * An upstream entity whose field names are known but whose values have not
+ * been checked yet. Reading a field upstream doesn't send is a compile error.
+ */
+type Unchecked<T> = { [K in keyof T]?: unknown };
+type Upstream<Type extends EntityType> = Unchecked<
+  Extract<UpstreamEntity, { type: Type }>
+>;
+
+/**
+ * Deletions are too rare to appear in a sample of the stream, so the
+ * generator leaves them out and their shape is declared here instead.
+ */
+interface UpstreamDeletion {
+  id: number;
+  type: UpstreamEntity["type"];
+  deleted: true;
+}
+
+const supportedTypes = new Set<unknown>(ENTITY_TYPES);
+const colors = new Set<unknown>(ENTITY_COLORS);
+
+function isEntityType(value: unknown): value is EntityType {
+  return supportedTypes.has(value);
+}
+
+function isEntityColor(value: unknown): value is EntityColor {
+  return colors.has(value);
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -135,81 +162,94 @@ export function sanitizeEntity(
   onAvatarImage?: AvatarImageObserver,
 ): EntityUpdate | null {
   if (!isRecord(value)) return null;
+  const entity: Unchecked<UpstreamEntity> = value;
+  const { type } = entity;
   if (
-    (typeof value.id !== "string" && typeof value.id !== "number") ||
-    typeof value.type !== "string" ||
-    !supportedTypes.has(value.type)
+    (typeof entity.id !== "string" && typeof entity.id !== "number") ||
+    !isEntityType(type)
   )
     return null;
 
-  const id = String(value.id);
-  const type = value.type as EntityType;
-  if (value.deleted === true) return { id, type, deleted: true };
-  if (
-    !isRecord(value.pos) ||
-    !finiteNumber(value.pos.x) ||
-    !finiteNumber(value.pos.y)
-  )
-    return null;
-  const pos = { x: value.pos.x, y: value.pos.y };
+  const id = String(entity.id);
+  const deletion: Unchecked<UpstreamDeletion> = value;
+  if (deletion.deleted === true) return { id, type, deleted: true };
+  const pos = position(entity.pos);
+  if (!pos) return null;
 
-  if (type === "Wall") {
-    const wallText = limitedString(value.wall_text, 8);
-    return {
-      id,
-      type,
-      pos,
-      color: colors.has(String(value.color))
-        ? (value.color as EntityColor)
-        : "gray",
-      ...(wallText ? { wall_text: wallText } : {}),
-    };
+  switch (type) {
+    case "Wall": {
+      const wall: Upstream<typeof type> = value;
+      const wallText = limitedString(wall.wall_text, 8);
+      return {
+        id,
+        type,
+        pos,
+        color: isEntityColor(wall.color) ? wall.color : "gray",
+        ...(wallText ? { wall_text: wallText } : {}),
+      };
+    }
+    case "Avatar": {
+      const avatar: Upstream<typeof type> = value;
+      const name = limitedString(avatar.person_name, 100);
+      const imagePath = limitedString(avatar.image_path, 2_048);
+      onAvatarImage?.(id, imagePath);
+      return {
+        id,
+        type,
+        pos,
+        ...(name ? { name } : {}),
+        ...(imagePath
+          ? {
+              image_url: `/api/avatars/${encodeURIComponent(id)}?v=${avatarImageVersion(imagePath)}`,
+            }
+          : {}),
+      };
+    }
+    case "Bot": {
+      const bot: Upstream<typeof type> = value;
+      const name = limitedString(bot.name, 100);
+      return {
+        id,
+        type,
+        pos,
+        emoji: limitedString(bot.emoji, 16) || "🤖",
+        ...(name ? { name } : {}),
+      };
+    }
+    case "AudioRoom": {
+      const room: Upstream<typeof type> = value;
+      if (
+        !finiteNumber(room.width, 0.01, 1_000) ||
+        !finiteNumber(room.height, 0.01, 1_000)
+      )
+        return null;
+      return { id, type, pos, width: room.width, height: room.height };
+    }
+    case "Note": {
+      const note: Upstream<typeof type> = value;
+      const noteText = limitedString(note.note_text, 4_000);
+      return { id, type, pos, ...(noteText ? { note_text: noteText } : {}) };
+    }
+    case "Desk":
+    case "ZoomLink":
+    case "Link":
+    case "AudioBlock":
+    case "PhotoBlock":
+    case "RC::Calendar":
+      return { id, type, pos };
+    default: {
+      const unhandled: never = type;
+      return unhandled;
+    }
   }
-  if (type === "Avatar") {
-    // Upstream sends person_name; fixtures and older payloads use name.
-    const name =
-      limitedString(value.person_name, 100) ?? limitedString(value.name, 100);
-    const initials = limitedString(value.initials, 4);
-    const photoColor = limitedString(value.photo_color, 32);
-    const imagePath = limitedString(value.image_path, 2_048);
-    onAvatarImage?.(id, imagePath);
-    return {
-      id,
-      type,
-      pos,
-      ...(name ? { name } : {}),
-      ...(initials ? { initials } : {}),
-      ...(photoColor ? { photo_color: photoColor } : {}),
-      ...(imagePath
-        ? {
-            image_url: `/api/avatars/${encodeURIComponent(id)}?v=${avatarImageVersion(imagePath)}`,
-          }
-        : {}),
-    };
-  }
-  if (type === "Bot") {
-    const name = limitedString(value.name, 100);
-    return {
-      id,
-      type,
-      pos,
-      emoji: limitedString(value.emoji, 16) || "🤖",
-      ...(name ? { name } : {}),
-    };
-  }
-  if (type === "AudioRoom") {
-    if (
-      !finiteNumber(value.width, 0.01, 1_000) ||
-      !finiteNumber(value.height, 0.01, 1_000)
-    )
-      return null;
-    return { id, type, pos, width: value.width, height: value.height };
-  }
-  if (type === "Note") {
-    const noteText = limitedString(value.note_text, 4_000);
-    return { id, type, pos, ...(noteText ? { note_text: noteText } : {}) };
-  }
-  return { id, type, pos } as SimpleEntity;
+}
+
+function position(value: unknown): Position | null {
+  if (!isRecord(value)) return null;
+  const pos: Unchecked<UpstreamEntity["pos"]> = value;
+  return finiteNumber(pos.x) && finiteNumber(pos.y)
+    ? { x: pos.x, y: pos.y }
+    : null;
 }
 
 export function decodeActionCableMessage(
