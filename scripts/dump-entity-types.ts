@@ -4,7 +4,9 @@
 //
 // With --write it also regenerates server/upstream.generated.ts, the
 // TypeScript shape of every entity type seen. Review the diff before
-// committing: it is how upstream changes reach the compiler.
+// committing: it is how upstream changes reach the compiler. Deletions are
+// counted but left out of the shapes: they are too rare for a sample to
+// describe, so server/protocol.ts declares them by hand.
 //
 // Usage: bun scripts/dump-entity-types.ts [listen-seconds] [--write]
 
@@ -52,6 +54,7 @@ interface TypeSummary {
   shape: ObjectShape;
 }
 const types = new Map<string, TypeSummary>();
+let deletions = 0;
 let sawSnapshot = false;
 
 function kindOf(value: unknown): string {
@@ -86,7 +89,11 @@ function observeObject(shape: ObjectShape, value: object) {
 
 function record(entity: unknown, source: "snapshot" | "updates") {
   if (typeof entity !== "object" || entity === null) return;
-  const { type } = entity as { type?: unknown };
+  const { type, deleted } = entity as { type?: unknown; deleted?: unknown };
+  if (deleted === true) {
+    deletions += 1;
+    return;
+  }
   const name = typeof type === "string" ? type : `<${kindOf(type)}>`;
   let summary = types.get(name);
   if (!summary) {
@@ -173,6 +180,7 @@ async function report() {
     `\nUnsupported (seen, not handled): ${unsupported.join(", ") || "none"}`,
   );
   console.log(`Supported but not seen: ${unseen.join(", ") || "none"}`);
+  console.log(`Deletions (not included in shapes): ${deletions}`);
 
   if (write) {
     const options = await resolveConfig(generatedPath);

@@ -95,6 +95,16 @@ type Upstream<Type extends EntityType> = Unchecked<
   Extract<UpstreamEntity, { type: Type }>
 >;
 
+/**
+ * Deletions are too rare to appear in a sample of the stream, so the
+ * generator leaves them out and their shape is declared here instead.
+ */
+interface UpstreamDeletion {
+  id: number;
+  type: UpstreamEntity["type"];
+  deleted: true;
+}
+
 const supportedTypes = new Set<unknown>(ENTITY_TYPES);
 const colors = new Set<unknown>(ENTITY_COLORS);
 
@@ -161,9 +171,8 @@ export function sanitizeEntity(
     return null;
 
   const id = String(entity.id);
-  // No deletion appeared in the sampled stream, so `deleted` isn't in the
-  // generated types; it is read from the raw record.
-  if (value.deleted === true) return { id, type, deleted: true };
+  const deletion: Unchecked<UpstreamDeletion> = value;
+  if (deletion.deleted === true) return { id, type, deleted: true };
   const pos = position(entity.pos);
   if (!pos) return null;
 

@@ -5,7 +5,7 @@ import { UPSTREAM_FIELDS } from "../server/upstream.generated.js";
 
 // Fixtures are fed through sanitizeEntity as if they came from upstream, so
 // they may only use fields the stream actually sends. Deletions carry
-// `deleted`, which the sampled stream may not have included.
+// `deleted`, which protocol.ts declares by hand rather than generating.
 const fixturesDirectory = new URL("./fixtures/", import.meta.url);
 const allowedFields = new Map<string, Set<string>>(
   Object.entries(UPSTREAM_FIELDS).map(([type, fields]) => [
