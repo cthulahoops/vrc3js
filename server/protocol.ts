@@ -178,7 +178,7 @@ export function sanitizeEntity(
 
   switch (type) {
     case "Wall": {
-      const wall: Upstream<"Wall"> = value;
+      const wall: Upstream<typeof type> = value;
       const wallText = limitedString(wall.wall_text, 8);
       return {
         id,
@@ -189,7 +189,7 @@ export function sanitizeEntity(
       };
     }
     case "Avatar": {
-      const avatar: Upstream<"Avatar"> = value;
+      const avatar: Upstream<typeof type> = value;
       const name = limitedString(avatar.person_name, 100);
       const imagePath = limitedString(avatar.image_path, 2_048);
       onAvatarImage?.(id, imagePath);
@@ -206,7 +206,7 @@ export function sanitizeEntity(
       };
     }
     case "Bot": {
-      const bot: Upstream<"Bot"> = value;
+      const bot: Upstream<typeof type> = value;
       const name = limitedString(bot.name, 100);
       return {
         id,
@@ -217,7 +217,7 @@ export function sanitizeEntity(
       };
     }
     case "AudioRoom": {
-      const room: Upstream<"AudioRoom"> = value;
+      const room: Upstream<typeof type> = value;
       if (
         !finiteNumber(room.width, 0.01, 1_000) ||
         !finiteNumber(room.height, 0.01, 1_000)
@@ -226,7 +226,7 @@ export function sanitizeEntity(
       return { id, type, pos, width: room.width, height: room.height };
     }
     case "Note": {
-      const note: Upstream<"Note"> = value;
+      const note: Upstream<typeof type> = value;
       const noteText = limitedString(note.note_text, 4_000);
       return { id, type, pos, ...(noteText ? { note_text: noteText } : {}) };
     }

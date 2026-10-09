@@ -182,6 +182,13 @@ async function report() {
   console.log(`Supported but not seen: ${unseen.join(", ") || "none"}`);
   console.log(`Deletions (not included in shapes): ${deletions}`);
 
+  if (write && unseen.length) {
+    // Writing now would drop those interfaces from the generated file.
+    console.error(
+      `\nNot writing ${generatedPath}: supported types were not seen. Listen longer and try again.`,
+    );
+    process.exit(1);
+  }
   if (write) {
     const options = await resolveConfig(generatedPath);
     const source = await format(generate(), {
